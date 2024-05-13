@@ -10,6 +10,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <time.h>
+#include <fcntl.h>
 
 // Constant Definitions
 #include "NodeDefinitions.h"
@@ -17,55 +19,76 @@
 
 using namespace std;
 
+double epoch_double(struct timespec *tv) {
+
+  if (clock_gettime(CLOCK_REALTIME, tv)) {
+    cout << "ERROR: clock_gettime function call failed." << endl;
+    exit(1);
+  }
+  char time_str[32];
+
+  snprintf(time_str, 32, "%ld.%.9ld", tv->tv_sec, tv->tv_nsec);
+
+  return atof(time_str);
+}
+
+
 
 int main() {
-    cout << "--------------------- Project Integrate Booting ---------------------" << endl;
+    cout << "-------------------------- Project Integrate --------------------------" << endl;
     fstream logfile;
-    chrono::system_clock::time_point begin = chrono::system_clock::now(); // get timestamp for logging log message times.
+    struct timespec tv;
+    struct timespec alttv;
+    double begin = epoch_double(&tv); // get timestamp for logging log message times.
 
     char node_message[200];
     memset(node_message, '\0', sizeof(node_message));
 
     try {
         logfile.open("log.txt", std::ios_base::out);
-        logfile << "[ "; logfile << (chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now() - begin) / 1000000).count() << " ] Log opened successfully." << endl;
+        logfile << "[ " << (epoch_double(&alttv) - begin) << " ] Log opened successfully." << endl;
     } catch (ifstream::failure e) {
-        cout << "[ " << (((chrono::system_clock::now() - begin).count() * 100) / 1000000) << " ] No log file. Creating..." << endl;
+        cout << "[ " << (epoch_double(&alttv) - begin) << " ] No log file. Creating..." << endl;
         ofstream file("log.txt");
 
         file.close();
         logfile.open("log.txt", std::ios_base::out);
-        cout << "[ " << (((chrono::system_clock::now() - begin).count() * 100) / 1000000) << " ] log.txt created. " << endl;
+        cout << "[ " << (epoch_double(&alttv) - begin) << " ] log.txt created. " << endl;
     }
 
     sockaddr_in6 address, client_address;
     unsigned int client_struct_size = sizeof(client_address);
 
-    logfile << "[ " << (((chrono::system_clock::now() - begin).count() * 100) / 1000000) << " ] Opening socket for pairing process... " << endl;
+    logfile << "[ " << (epoch_double(&alttv) - begin) << " ] Opening socket for pairing process... " << endl;
 
     int sockfd = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
+    fcntl(sockfd, F_SETFL, O_NONBLOCK);
+
     if (sockfd < 0) {
-        logfile << "[ " << (((chrono::system_clock::now() - begin).count() * 100) / 1000000) << " ] Socket creation failed. Exiting." << endl;
+        logfile << "[ " << (epoch_double(&alttv) - begin) << " ] Socket creation failed. Exiting." << endl;
         exit(EXIT_FAILURE);
     }
 
-    logfile << "[ " << (((chrono::system_clock::now() - begin).count() * 100) / 1000000) << " ] Socket created successfully. Binding to open port..." << endl;
+    logfile << "[ " << (epoch_double(&alttv) - begin) << " ] Socket created successfully. Binding to open port..." << endl;
 
     address.sin6_family = AF_INET6;
     address.sin6_addr = in6addr_any;
     address.sin6_port = htons(PAIRING_PORT);
 
     if (bind(sockfd, (struct sockaddr *) &address, sizeof(address)) < 0) {
-        logfile << "[ " << (((chrono::system_clock::now() - begin).count() * 100) / 1000000) << " ] Binding to open port failed. Exiting." << endl;
+        logfile << "[ " << (epoch_double(&alttv) - begin) << " ] Binding to open port failed. Exiting." << endl;
         exit(EXIT_FAILURE);
     }
-    chrono::system_clock::time_point begin_wait = chrono::system_clock::now();
 
-    logfile << "[ " << (((chrono::system_clock::now() - begin).count() * 100) / 1000000) << " ] Bind successful. Listening for other nodes..." << endl;
+    struct timespec connection_wait;
+    double connection_wait_begin = epoch_double(&connection_wait);
+    
 
-    while ((((chrono::system_clock::now() - begin).count() * 100) / 1000000) < 10.0) { // waiting for other nodes to pair
+    logfile << "[ " << (epoch_double(&alttv) - begin) << " ] Bind successful. Listening for other nodes..." << endl;
+
+    while ((epoch_double(&alttv) - connection_wait_begin) < 10.0) { // waiting for other nodes to pair
         if (recvfrom(sockfd, node_message, sizeof(node_message), 0, (struct sockaddr *)&client_address, &client_struct_size) >= 0) {
-                logfile << "[ " << (begin_wait - begin).count() << " ] Node detected. Beginning pairing process..." << endl;
+                logfile << "[ " << (epoch_double(&alttv) - begin) << " ] Node detected. Beginning pairing process..." << endl;
         }
     }
 
