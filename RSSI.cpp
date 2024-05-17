@@ -2,13 +2,14 @@
 #include <pcap.h>
 //Compile flags -lpcap test
 
-void getDeviceID(char *dev_ID, char error_buff[]);
+void getDeviceID(char *dev_ID, pcap_if_t **all_dev, char error_buff[]);
 void packet_handler(u_char* args, const struct pcap_pkthdr* packet_header, const u_char* packet_data);
 
 int main() {
 
     /* Parameters for device recognition */
     char *dev_ID; /* Name of device */
+    pcap_if_t *all_dev; /* List that holds all network devices */
     char error_buffer[PCAP_ERRBUF_SIZE]; /* Error buffer */
 
     /* Parameters for packet capture */
@@ -19,7 +20,7 @@ int main() {
     int timeout_limit = 10000;  /* Timeout delay */
 
     /* Get the wireless device */
-    getDeviceID(dev_ID,error_buffer);
+    getDeviceID(dev_ID, &all_dev, error_buffer);
 
     /* Open dev_ID for receiving packets */
     dev_handler = pcap_open_live(
@@ -64,12 +65,14 @@ int main() {
     return 0;
 }
 
-void getDeviceID(char *dev_ID, char error_buff[]){
-    dev_ID = pcap_lookupdev(error_buff);    /* Grab device ID */
-    if(dev_ID){ /* Device found sucessfully */
+void getDeviceID(char *dev_ID, pcap_if_t **all_dev, char error_buff[]){
+    bool status;
+    status = pcap_findalldevs(all_dev, error_buff); /* Get list of networn devices */
+    if(!status){ /* Device found sucessfully */
         printf("Network Device Found\n");
     }else{  /* Device not found */
         printf("Error finding device %s\n",error_buff);
+        exit(1);
     }
 }
 
