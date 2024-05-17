@@ -1,22 +1,5 @@
-// System Libraries 
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/socket.h>
-#include <iostream>
-#include <fstream>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <chrono>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <time.h>
-#include <fcntl.h>
-#include <pcap/pcap.h>
-
 // Constant Definitions
 #include "NodeDefinitions.h"
-#include <unistd.h>
 
 using namespace std;
 
@@ -105,13 +88,41 @@ int main() {
 
     logmsg(begin, &alttv, &logfile, "Setup successful. Listening for other nodes...", true);
 
+    /*
+        LML Protocol:
+        {
+            type: pairing | signal_data | candidate,
+            data: {
+                IF type = signal_data
+                devices: []
+                
+            }
+        }
+    
+    */
+    
+    string msg = "{\n type:pairing,\n }";
+
     while ((epoch_double(&alttv) - connection_wait_begin) < DEFAULT_WAIT) { // waiting for other nodes to pair
-        if (recvfrom(sockfd, node_message, sizeof(node_message), 0, (struct sockaddr *)&client_address, &client_struct_size) >= 0) {
-            logmsg(begin, &alttv, &logfile, "Node detected. Beginning pairing process...", true);
+        if (recvfrom(sockfd, node_message, sizeof(node_message), 0, (struct sockaddr *)&client_address, &client_struct_size) > 0) {
+            // look for IS_PARENT: TRUE,
+            string parent_line;
+            int i = 3; // starting byte of actual packet data (after {\n )
+            for (; i < 18; i++) {
+                parent_line += string(1, node_message[i]);
+            }
+
+            if (parent_line == "IS_PARENT: TRUE") {
+                logmsg(begin, &alttv, &logfile, "Parent node detected. Beginning pairing process...", true);
+                break;
+            } else {
+                // not the parent, so must be another node looking to pair with parent. Ignore the message
+                memset(node_message, '\0', sizeof(node_message));
+            }
         }
     }
 
-    if (node_message[8] == '\0') {
+    if (node_message[0] == '\0') {
         logmsg(begin, &alttv, &logfile, "No node found. Assuming current node is parent.", true);
 
         char errbuf[PCAP_ERRBUF_SIZE];
@@ -154,13 +165,14 @@ int main() {
                         close(sockfd);
                         exit(1);
                     }
-
+                    // implement thread logic for monitor and sending threads
+                    
                     
                 }
 
 
             } else {
-                logmsg(begin, &alttv, &logfile, "ERROR: No alternate wireless adapter found. Using " + string(DEFAULT_INTERFACE) + " will result in decreased effectiveness of system, and is currently unsupported. Please reboot the Pi.", true, 2);
+                logmsg(begin, &alttv, &logfile, "ERROR: No alternate wireless adapter found. Using " + string(DEFAULT_INTERFACE) + " will result in decreased effectiveness of system, and is currently unsupported. Please plug in the wireless adapter and reboot the Pi.", true, 2);
 
                 logfile.close();
                 close(sockfd);
@@ -174,6 +186,11 @@ int main() {
     } else {
         logmsg(begin, &alttv, &logfile, "Node detected.", true);
         /* child code goes here */
+
+
+
+        // send data through socket to address of parent 
+        
     }
 
 
