@@ -1,6 +1,5 @@
 #include <iostream>
 #include <pcap.h>
-//Compile flags -lpcap test
 
 void getDeviceID(char *dev_ID, pcap_if_t **all_dev, char error_buff[]);
 void packet_handler(u_char* args, const struct pcap_pkthdr* packet_header, const u_char* packet_data);
@@ -20,7 +19,7 @@ int main() {
     int timeout_limit = 10000;  /* Timeout delay */
 
     /* Get the wireless device */
-    getDeviceID(dev_ID, &all_dev, error_buffer);
+    getDeviceID(dev_ID, all_dev, error_buffer);
 
     /* Open dev_ID for receiving packets */
     dev_handler = pcap_open_live(
@@ -65,9 +64,9 @@ int main() {
     return 0;
 }
 
-void getDeviceID(char *dev_ID, pcap_if_t **all_dev, char error_buff[]){
+void getDeviceID(char *dev_ID, pcap_if_t *all_dev, char error_buff[]){
     bool status;
-    status = pcap_findalldevs(all_dev, error_buff); /* Get list of networn devices */
+    status = pcap_findalldevs(&all_dev, error_buff); /* Get list of networn devices */
     if(!status){ /* Device found sucessfully */
         printf("Network Device Found\n");
         dev_ID = all_dev.next(); 
