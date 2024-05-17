@@ -70,6 +70,7 @@ void getDeviceID(char *dev_ID, pcap_if_t **all_dev, char error_buff[]){
     status = pcap_findalldevs(all_dev, error_buff); /* Get list of networn devices */
     if(!status){ /* Device found sucessfully */
         printf("Network Device Found\n");
+        dev_ID = all_dev.next(); 
     }else{  /* Device not found */
         printf("Error finding device %s\n",error_buff);
         exit(1);
