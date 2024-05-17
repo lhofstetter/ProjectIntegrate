@@ -1,5 +1,6 @@
-#include <stdio.h>
-#include <stdlib.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <sys/socket.h>
 #include <iostream>
 #include <fstream>
