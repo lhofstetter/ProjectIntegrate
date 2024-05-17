@@ -2,15 +2,44 @@
 #include <pcap.h>
 //Compile flags -lpcap test
 
-void packet_handler(u_char* user, const struct pcap_pkthdr* pkt_header, const u_char* packet_data) {
-    // Parse the packet data here to extract the signal strength value
-    // For example, for Wi-Fi packets, parse the IEEE 802.11 header to access the signal strength
-
-    // Print the signal strength value
-    std::cout << "Signal Strength: " << static_cast<int>(packet_data[22]) << std::endl;
-}
+void getDeviceID(char *dev_ID, char error_buff[]);
+void packet_handler(u_char* args, const struct pcap_pkthdr* packet_header, const u_char* packet_data);
 
 int main() {
+
+    /* Parameters for device recognition */
+    char *dev_ID; /* Name of device */
+    char error_buffer[PCAP_ERRBUF_SIZE]; /* Error buffer */
+
+    /* Parameters for packet capture */
+    pcap_t *dev_handler; /* Handler for reading pkt data */
+    const u_char *packet; /* Holds bytes of data from pkt */
+    struct pcap_pkthdr packet_header; /* Packet struct */
+    int packet_count_limit = 0; /* Number of packets to capture 0 = unlimited */
+    int timeout_limit = 10000;  /* Timeout delay */
+
+    /* Get the wireless device */
+    getDeviceID(dev_ID,error_buffer);
+
+    /* Open dev_ID for receiving packets */
+    dev_handler = pcap_open_live(
+        dev_ID,
+        BUFSIZ,
+        packet_count_limit,
+        timeout_limit,
+        error_buffer
+    );
+
+
+    packet = pcap_next(dev_handler,&packet_header);
+
+    if(!packet){
+        return 1;
+    }
+
+
+
+
     char errbuf[PCAP_ERRBUF_SIZE];
     pcap_t* handle;
 
@@ -33,4 +62,20 @@ int main() {
     pcap_close(handle);
 
     return 0;
+}
+
+void getDeviceID(char *dev_ID, char error_buff[]){
+    dev_ID = pcap_lookupdev(error_buff);    /* Grab device ID */
+    if(dev_ID){ /* Device found sucessfully */
+        printf("Network Device Found\n");
+    }else{  /* Device not found */
+        printf("Error finding device %s\n",error_buff);
+    }
+}
+
+void packet_handler(u_char* args, const struct pcap_pkthdr* packet_header, const u_char* packet_data){
+
+    //static_cast<int>(packet_data[22])
+    //Print signal strength here
+    printf("");
 }
