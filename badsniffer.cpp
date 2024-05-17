@@ -67,13 +67,7 @@ void control_govee_device(bool turnOn, const DeviceConfig &config)
 
 double calculateDistance(int rssi, int txPower)
 {
-    if (rssi == 0)
-        return -1.0;
-    double ratio = rssi * 1.0 / txPower;
-    if (ratio < 1.0)
-        return pow(ratio, 10);
-    else
-        return (0.89976) * pow(ratio, 7.7095) + 0.111;
+    // old placeholder for distance calculation
 }
 
 void *ping_device(void *arg)
@@ -100,8 +94,8 @@ void *monitor_rssi(void *arg)
         return nullptr;
     }
 
-    int rssi = -70;                                 // Example RSSI value
-    double distance = calculateDistance(rssi, -50); // RSSI at 1m needs to be measured
+    // int rssi = -70;                                 // Example RSSI value
+    // double distance = calculateDistance(rssi, -50); // RSSI at 1m needs to be measured
     log("Distance to device: " + std::to_string(distance) + " meters");
 
     control_govee_device(true, config);
