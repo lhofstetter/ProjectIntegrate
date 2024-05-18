@@ -5,6 +5,50 @@ using namespace std;
 
 const int placeholder_noise = -75;
 
+const string LML_Types[] = {"type", "noise", "data", "candidate", "signal_data", "device", "action", "configure", "port", "protocol", "name_of_device", "devices", "socket_to_communicate", "type_of_socket_used_for_communication", "interval"};
+
+map<string, string> parse_json(char * node_msg) {
+    map<string, string> m;
+
+    static int i;
+    string current_str = "";
+    for (i = 0; i < sizeof(node_msg); i++) {
+        current_str += string(1, node_msg[i]);
+        if (current_str == "{\n") {
+            current_str = "";
+        }
+
+        static int y;
+        if (current_str.length() >= 4) {
+            for (y = 0; LML_Types->size(); y++) {
+                if (current_str.find(LML_Types[y])) {
+                    return;
+                }
+            }
+        }
+        
+
+        if (current_str.find("type:")) {
+            current_str = "";
+            static int x;
+
+            for (x = i; node_msg[x] != '\n'; x++) {
+                current_str += string(1, node_msg[x]);
+            }
+            
+            m["type"] = current_str; 
+            i = x + 1;
+        }
+
+        if (current_str.find("noise:")) {
+
+        }
+
+
+    }
+    return m;
+}
+
 double epoch_double(struct timespec *tv)
 {
     if (clock_gettime(CLOCK_REALTIME, tv))
@@ -176,34 +220,38 @@ int main()
 
     logmsg(begin, &alttv, &logfile, "Setup successful. Listening for other nodes...", true);
 
-    string msg = "{\n type:\"pairing\",\n noise:" + to_string(placeholder_noise) + "\n}";
-
     sockaddr_in6 broadcast;
-    in6_addr broadcast_addr;
-    unsigned char buf[sizeof(struct in6_addr)];
-    inet_pton(AF_INET6, "ff02::1", buf);
+    struct in6_addr broadcast_addr;
+    
+    inet_pton(AF_INET6, "ff02::1", &broadcast_addr);
 
-    while ((epoch_double(&alttv) - connection_wait_begin) < DEFAULT_WAIT)
-    {
-        if (recvfrom(sockfd, node_message, sizeof(node_message), 0, (struct sockaddr *)&client_address, &client_struct_size) > 0)
-        {
+    broadcast.sin6_addr = broadcast_addr;
+    broadcast.sin6_family = AF_INET6;
+    broadcast.sin6_port = htons(PAIRING_PORT);
+    char * msg;
+    sprintf(msg, "{\n type:\"pairing\",\n noise:%d\n}", placeholder_noise);
+
+    const sockaddr *generic_addr = reinterpret_cast<const sockaddr *>(&broadcast);
+
+    sendto(sockfd, msg, sizeof(msg), 0, (const sockaddr *) generic_addr, sizeof(generic_addr));
+
+    while ((epoch_double(&alttv) - connection_wait_begin) < DEFAULT_WAIT) { // waiting for other nodes to pair
+        if (recvfrom(sockfd, node_message, sizeof(node_message), 0, (struct sockaddr *)&client_address, &client_struct_size) > 0) {
+            // look for IS_PARENT: TRUE,
             string parent_line;
-            int i = 3; // Starting byte of actual packet data (after "{\n")
-            for (; i < 18; i++)
-            {
+            int i = 3; // starting byte of actual packet data (after {\n )
+            for (; i < 18; i++) {
                 parent_line += string(1, node_message[i]);
             }
 
-            if (parent_line == "IS_PARENT: TRUE")
-            {
-                logmsg(begin, &alttv, &logfile, "Parent node detected. Beginning pairing process...", true);
-                break;
-            }
-            else
-            {
-                memset(node_message, '\0', sizeof(node_message));
-            }
-        }
+            logmsg(begin, &alttv, &logfile, "Parent node detected. Beginning pairing process...", true);
+            break;
+                // not the parent, so must be another node looking to pair with parent. Ignore the message
+            memset(node_message, '\0', sizeof(node_message));
+
+        } else {
+            sendto(sockfd, msg, sizeof(msg), 0, (const sockaddr *) generic_addr, sizeof(generic_addr));
+        } 
     }
 
     if (node_message[0] == '\0')

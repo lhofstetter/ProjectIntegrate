@@ -21,6 +21,7 @@
 #include <memory>
 #include <string>
 #include <regex>
+#include <map>
 
 #define PAIRING_PORT 8082
 #define DEFAULT_WAIT 10.0
