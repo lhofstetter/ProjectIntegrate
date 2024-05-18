@@ -1,7 +1,7 @@
 #Compiler Options
 CC = g++
 CFLAGS = -Wall -Wextra -std=c++11
-LDFLAGS = -lpcap
+LDFLAGS = -lpcap -lpthread
 
 #Targets
 all : RSSI NodeRoutine
