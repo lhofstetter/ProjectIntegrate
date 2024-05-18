@@ -1,9 +1,21 @@
+#Compiler Options
 CC = g++
-CFLAGS = -lpcap
-OBJ = RSSI.cpp
+CFLAGS = -Wall -Wextra -std=c++11
+LDFLAGS = -lpcap
 
-RSSI: $(OBJ)
-	$(CC) -o $@ $^ $(CFLAGS)
+#Targets
+all : RSSI NodeRoutine
+
+%.o: %.cpp
+	$(CC) $(CFLAGS) -c $< -o $@
+
+RSSI: RSSI.o
+	$(CC) $^ -o $@ $(LDFLAGS)
+
+NodeRoutine: NodeRoutine.o NodeDefinitions.h
+	$(CC) $^ -o $@ $(LDFLAGS)
+	
+RSSI.o: RSSI.cpp
 
 clean:
-	rm -f $(OBJ)
+	rm -f *.o RSSI NodeRoutine
