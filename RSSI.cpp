@@ -1,7 +1,7 @@
 #include <iostream>
 #include <pcap.h>
 
-void getDeviceID(char *dev_ID, pcap_if_t **all_dev, char error_buff[]);
+void getDeviceID(char *dev_ID, pcap_if_t *all_dev, char error_buff[]);
 void packet_handler(u_char* args, const struct pcap_pkthdr* packet_header, const u_char* packet_data);
 
 int main() {
@@ -69,7 +69,7 @@ void getDeviceID(char *dev_ID, pcap_if_t *all_dev, char error_buff[]){
     status = pcap_findalldevs(&all_dev, error_buff); /* Get list of networn devices */
     if(!status){ /* Device found sucessfully */
         printf("Network Device Found\n");
-        dev_ID = all_dev.next(); 
+       // dev_ID = all_dev.next(); 
     }else{  /* Device not found */
         printf("Error finding device %s\n",error_buff);
         exit(1);
@@ -80,5 +80,5 @@ void packet_handler(u_char* args, const struct pcap_pkthdr* packet_header, const
 
     //static_cast<int>(packet_data[22])
     //Print signal strength here
-    printf("");
+    printf(" ");
 }
