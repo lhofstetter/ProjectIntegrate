@@ -7,33 +7,40 @@ const int placeholder_noise = -75;
 
 const string LML_Types[] = {"type", "noise", "candidate", "signal_data", "device", "action", "configure", "port", "protocol", "name_of_device", "devices", "socket_to_communicate", "type_of_socket_used_for_communication", "interval"};
 
-map<string, string> parse_json(char * node_msg) {
+map<string, string> parse_json(char *node_msg)
+{
     map<string, string> m;
 
     static int i;
     string current_str = "";
-    for (i = 0; i < sizeof(node_msg); i++) {
+    for (i = 0; i < sizeof(node_msg); i++)
+    {
         current_str += string(1, node_msg[i]);
-        if (current_str == "{\n" || current_str == ",\n") {
+        if (current_str == "{\n" || current_str == ",\n")
+        {
             current_str = "";
         }
 
         static int y;
-        if (current_str.length() >= 4) {
-            for (y = 0; LML_Types->size(); y++) {
-                if (current_str.find(LML_Types[y] + ":")) {
-                        current_str = "";
-                        static int x;
+        if (current_str.length() >= 4)
+        {
+            for (y = 0; LML_Types->size(); y++)
+            {
+                if (current_str.find(LML_Types[y] + ":"))
+                {
+                    current_str = "";
+                    static int x;
 
-                        for (x = i; node_msg[x] != '\n'; x++) {
-                            current_str += string(1, node_msg[x]);
-                        }
-                
-                        m[LML_Types[y]] = current_str; 
-                        i = x + 1;
+                    for (x = i; node_msg[x] != '\n'; x++)
+                    {
+                        current_str += string(1, node_msg[x]);
                     }
+
+                    m[LML_Types[y]] = current_str;
+                    i = x + 1;
                 }
             }
+        }
     }
 
     return m;
@@ -212,34 +219,39 @@ int main()
 
     sockaddr_in6 broadcast;
     struct in6_addr broadcast_addr;
-    
+
     inet_pton(AF_INET6, "ff02::1", &broadcast_addr);
 
     broadcast.sin6_addr = broadcast_addr;
     broadcast.sin6_family = AF_INET6;
     broadcast.sin6_port = htons(PAIRING_PORT);
-    char * msg;
+    char *msg;
     sprintf(msg, "{\n type:\"pairing\",\n noise:%d\n}", placeholder_noise);
 
     const sockaddr *generic_addr = reinterpret_cast<const sockaddr *>(&broadcast);
 
-    sendto(sockfd, msg, sizeof(msg), 0, (const sockaddr *) generic_addr, sizeof(generic_addr));
+    sendto(sockfd, msg, sizeof(msg), 0, (const sockaddr *)generic_addr, sizeof(generic_addr));
 
-    while ((epoch_double(&alttv) - connection_wait_begin) < DEFAULT_WAIT) { // waiting for other nodes to pair
-        if (recvfrom(sockfd, node_message, sizeof(node_message), 0, (struct sockaddr *)&client_address, &client_struct_size) > 0) {
+    while ((epoch_double(&alttv) - connection_wait_begin) < DEFAULT_WAIT)
+    { // waiting for other nodes to pair
+        if (recvfrom(sockfd, node_message, sizeof(node_message), 0, (struct sockaddr *)&client_address, &client_struct_size) > 0)
+        {
             // look for IS_PARENT: TRUE,
             map<string, string> packet = parse_json(node_message);
             auto key_value = packet.find("socket_to_communicate");
 
-            if (key_value != packet.end()) {
+            if (key_value != packet.end())
+            {
                 logmsg(begin, &alttv, &logfile, "Parent node detected. Beginning pairing process...", true);
                 break;
-            } 
-                // not the parent, so must be another node. Ignore the message
+            }
+            // not the parent, so must be another node. Ignore the message
             memset(node_message, '\0', sizeof(node_message));
-        } else {
-            sendto(sockfd, msg, sizeof(msg), 0, (const sockaddr *) generic_addr, sizeof(generic_addr));
-        } 
+        }
+        else
+        {
+            sendto(sockfd, msg, sizeof(msg), 0, (const sockaddr *)generic_addr, sizeof(generic_addr));
+        }
     }
 
     if (node_message[0] == '\0')
