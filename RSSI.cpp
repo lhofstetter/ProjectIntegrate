@@ -1,13 +1,15 @@
 #include <iostream>
 #include <pcap.h>
 
-void getDeviceID(char *dev_ID, pcap_if_t *all_dev, char error_buff[]);
+void getDeviceID(pcap_if_t * node, pcap_if_t *all_dev, char error_buff[]);
 void packet_handler(u_char* args, const struct pcap_pkthdr* packet_header, const u_char* packet_data);
 
 int main() {
 
     /* Parameters for device recognition */
+    pcap_if_t * node;
     char *dev_ID; /* Name of device */
+
     pcap_if_t *all_dev; /* List that holds all network devices */
     char error_buffer[PCAP_ERRBUF_SIZE]; /* Error buffer */
 
@@ -19,9 +21,15 @@ int main() {
     int timeout_limit = 10000;  /* Timeout delay */
 
     /* Get the wireless device */
-    getDeviceID(dev_ID, all_dev, error_buffer);
+    getDeviceID(node, all_dev, error_buffer);
 
     /* Open dev_ID for receiving packets */
+    dev_handler = pcap_create(dev_ID, error_buffer);
+    pcap_activate(dev_handler);
+
+
+    
+
     dev_handler = pcap_open_live(
         dev_ID,
         BUFSIZ,
@@ -64,12 +72,18 @@ int main() {
     return 0;
 }
 
-void getDeviceID(char *dev_ID, pcap_if_t *all_dev, char error_buff[]){
+void getDeviceID(pcap_if_t * node, pcap_if_t *all_dev, char error_buff[]){
     bool status;
     status = pcap_findalldevs(&all_dev, error_buff); /* Get list of networn devices */
     if(!status){ /* Device found sucessfully */
         printf("Network Device Found\n");
-       // dev_ID = all_dev.next(); 
+        pcap_if_t * node = all_dev;
+        while (node -> next != NULL) {
+            if( (node -> flags & PCAP_IF_WIRELESS) && (node -> flags & PCAP_IF_CONNECTION_STATUS_DISCONNECTED)){
+                break;
+            }
+            node = node -> next;
+        }
     }else{  /* Device not found */
         printf("Error finding device %s\n",error_buff);
         exit(1);
