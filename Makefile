@@ -6,16 +6,17 @@ LDFLAGS = -lpcap
 #Targets
 all : RSSI NodeRoutine
 
-%.o: %.cpp
+%.o: %.cpp NodeDefinitions.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
 RSSI: RSSI.o
 	$(CC) $^ -o $@ $(LDFLAGS)
 
-NodeRoutine: NodeRoutine.o NodeDefinitions.h
+NodeRoutine: NodeRoutine.o 
 	$(CC) $^ -o $@ $(LDFLAGS)
 	
 RSSI.o: RSSI.cpp
+NodeRoutine.o: NodeRoutine.cpp
 
 clean:
 	rm -f *.o RSSI NodeRoutine
