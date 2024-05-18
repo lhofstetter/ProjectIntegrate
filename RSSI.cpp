@@ -31,9 +31,9 @@ int main()
         exit(1);
     }
 
-    pcap_set_snaplen(dev_handler, 2048); /* Snapshot length */
-    pcap_set_rfmon(dev_handler, 1);
-    pcap_set_timeout(dev_handler, 512); /* 512ms timeout */
+    // pcap_set_snaplen(dev_handler, 2048); /* Snapshot length */
+    // pcap_set_rfmon(dev_handler, 1);
+    // pcap_set_timeout(dev_handler, 512); /* 512ms timeout */
 
     int err = pcap_activate(dev_handler);
 
