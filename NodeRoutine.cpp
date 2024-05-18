@@ -5,7 +5,7 @@ using namespace std;
 
 const int placeholder_noise = -75;
 
-const string LML_Types[] = {"type", "noise", "data", "candidate", "signal_data", "device", "action", "configure", "port", "protocol", "name_of_device", "devices", "socket_to_communicate", "type_of_socket_used_for_communication", "interval"};
+const string LML_Types[] = {"type", "noise", "candidate", "signal_data", "device", "action", "configure", "port", "protocol", "name_of_device", "devices", "socket_to_communicate", "type_of_socket_used_for_communication", "interval"};
 
 map<string, string> parse_json(char * node_msg) {
     map<string, string> m;
@@ -14,7 +14,7 @@ map<string, string> parse_json(char * node_msg) {
     string current_str = "";
     for (i = 0; i < sizeof(node_msg); i++) {
         current_str += string(1, node_msg[i]);
-        if (current_str == "{\n") {
+        if (current_str == "{\n" || current_str == ",\n") {
             current_str = "";
         }
 
@@ -22,30 +22,20 @@ map<string, string> parse_json(char * node_msg) {
         if (current_str.length() >= 4) {
             for (y = 0; LML_Types->size(); y++) {
                 if (current_str.find(LML_Types[y])) {
-                    return;
+                        current_str = "";
+                        static int x;
+
+                        for (x = i; node_msg[x] != '\n'; x++) {
+                            current_str += string(1, node_msg[x]);
+                        }
+                
+                        m[LML_Types[y]] = current_str; 
+                        i = x + 1;
+                    }
                 }
             }
         }
-        
 
-        if (current_str.find("type:")) {
-            current_str = "";
-            static int x;
-
-            for (x = i; node_msg[x] != '\n'; x++) {
-                current_str += string(1, node_msg[x]);
-            }
-            
-            m["type"] = current_str; 
-            i = x + 1;
-        }
-
-        if (current_str.find("noise:")) {
-
-        }
-
-
-    }
     return m;
 }
 
