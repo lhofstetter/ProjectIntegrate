@@ -21,7 +21,7 @@ map<string, string> parse_json(char * node_msg) {
         static int y;
         if (current_str.length() >= 4) {
             for (y = 0; LML_Types->size(); y++) {
-                if (current_str.find(LML_Types[y])) {
+                if (current_str.find(LML_Types[y] + ":")) {
                         current_str = "";
                         static int x;
 
@@ -34,7 +34,7 @@ map<string, string> parse_json(char * node_msg) {
                     }
                 }
             }
-        }
+    }
 
     return m;
 }
@@ -228,17 +228,15 @@ int main()
     while ((epoch_double(&alttv) - connection_wait_begin) < DEFAULT_WAIT) { // waiting for other nodes to pair
         if (recvfrom(sockfd, node_message, sizeof(node_message), 0, (struct sockaddr *)&client_address, &client_struct_size) > 0) {
             // look for IS_PARENT: TRUE,
-            string parent_line;
-            int i = 3; // starting byte of actual packet data (after {\n )
-            for (; i < 18; i++) {
-                parent_line += string(1, node_message[i]);
-            }
+            map<string, string> packet = parse_json(node_message);
+            auto key_value = packet.find("socket_to_communicate");
 
-            logmsg(begin, &alttv, &logfile, "Parent node detected. Beginning pairing process...", true);
-            break;
-                // not the parent, so must be another node looking to pair with parent. Ignore the message
+            if (key_value != packet.end()) {
+                logmsg(begin, &alttv, &logfile, "Parent node detected. Beginning pairing process...", true);
+                break;
+            } 
+                // not the parent, so must be another node. Ignore the message
             memset(node_message, '\0', sizeof(node_message));
-
         } else {
             sendto(sockfd, msg, sizeof(msg), 0, (const sockaddr *) generic_addr, sizeof(generic_addr));
         } 
