@@ -133,30 +133,29 @@ int main()
 
     try
     {
-        logfile.open("log.txt", std::ios_base::out);
+        logfile.open("log.txt", ios_base::out);
         logmsg(begin, &alttv, &logfile, "Log opened successfully.", false);
     }
     catch (ifstream::failure e)
     {
         logmsg(begin, &alttv, &logfile, "No log file. Creating...", true);
         ofstream file("log.txt");
-
         file.close();
-        logfile.open("log.txt", std::ios_base::out);
-        logmsg(begin, &alttv, &logfile, "log.txt created. ", true);
+        logfile.open("log.txt", ios_base::out);
+        logmsg(begin, &alttv, &logfile, "log.txt created.", true);
     }
 
     sockaddr_in6 address, client_address;
     unsigned int client_struct_size = sizeof(client_address);
 
-    logmsg(begin, &alttv, &logfile, "Opening socket for pairing process... ", false);
+    logmsg(begin, &alttv, &logfile, "Opening socket for pairing process...", false);
 
     int sockfd = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
     fcntl(sockfd, F_SETFL, O_NONBLOCK);
 
     if (sockfd < 0)
     {
-        logmsg(begin, &alttv, &logfile, "Socket creation failed. Exiting. ", false);
+        logmsg(begin, &alttv, &logfile, "Socket creation failed. Exiting.", false);
         exit(EXIT_FAILURE);
     }
 
@@ -181,18 +180,15 @@ int main()
 
     sockaddr_in6 broadcast;
     in6_addr broadcast_addr;
-
     unsigned char buf[sizeof(struct in6_addr)];
-
     inet_pton(AF_INET6, "ff02::1", buf);
 
     while ((epoch_double(&alttv) - connection_wait_begin) < DEFAULT_WAIT)
-    { // waiting for other nodes to pair
+    {
         if (recvfrom(sockfd, node_message, sizeof(node_message), 0, (struct sockaddr *)&client_address, &client_struct_size) > 0)
         {
-            // look for IS_PARENT: TRUE,
             string parent_line;
-            int i = 3; // starting byte of actual packet data (after {\n )
+            int i = 3; // Starting byte of actual packet data (after "{\n")
             for (; i < 18; i++)
             {
                 parent_line += string(1, node_message[i]);
@@ -205,7 +201,6 @@ int main()
             }
             else
             {
-                // not the parent, so must be another node looking to pair with parent. Ignore the message
                 memset(node_message, '\0', sizeof(node_message));
             }
         }
@@ -218,14 +213,11 @@ int main()
         char errbuf[PCAP_ERRBUF_SIZE];
         pcap_if_t *devices;
 
-        /* parent code  */
         if (pcap_findalldevs(&devices, errbuf) == PCAP_ERROR)
         {
             logmsg(begin, &alttv, &logfile, "ERROR: findalldevs call failed. \n Defaulting to " + string(DEFAULT_INTERFACE) + " will result in decreased effectiveness of system, and is currently unsupported. Please reboot the Pi.", true, 2);
-
             logfile.close();
             close(sockfd);
-
             exit(1);
         }
         else
@@ -234,14 +226,14 @@ int main()
             while (node->next != NULL)
             {
                 if ((node->flags & PCAP_IF_WIRELESS) && (node->flags & PCAP_IF_CONNECTION_STATUS_DISCONNECTED))
-                { // found wireless adapter that is not currently connected to Wi-Fi network
+                {
                     break;
                 }
                 node = node->next;
             }
 
             if (node->next != NULL)
-            { // successfully found wireless adapter
+            {
                 char *interface = node->name;
                 logmsg(begin, &alttv, &logfile, "Interface using wireless adapter found under " + string(interface) + ".", false);
                 pcap_t *device = pcap_create(interface, errbuf);
@@ -265,7 +257,6 @@ int main()
                         close(sockfd);
                         exit(1);
                     }
-                    // implement thread logic for monitor and sending threads
                 }
             }
             else
@@ -275,7 +266,6 @@ int main()
                 logfile.close();
                 close(sockfd);
                 pcap_freealldevs(devices);
-
                 exit(1);
             }
         }
@@ -283,30 +273,27 @@ int main()
     else
     {
         logmsg(begin, &alttv, &logfile, "Node detected.", true);
-        /* child code goes here */
-
         // send data through socket to address of parent
     }
 
     int noise_level = get_noise_level("wlan0"); // Add wireless interface here
 
-    // Govee command payload?? Will this work??
-    std::string api_key = "your_api_key";     // API KEY HERE
-    std::string device_id = "your_device_id"; // Figure out how we are using device ID
-    std::string message = "{"
-                          "\"device\": \"" +
-                          device_id + "\","
-                                      "\"model\": \"H6159\","
-                                      "\"cmd\": {"
-                                      "\"name\": \"turn\","
-                                      "\"value\": \"on\""
-                                      "}"
-                                      "}";
+    string api_key = "your_api_key";     // API KEY HERE
+    string device_id = "your_device_id"; // Figure out how we are using device ID
+    string message = "{"
+                     "\"device\": \"" +
+                     device_id + "\","
+                                 "\"model\": \"H6008\","
+                                 "\"cmd\": {"
+                                 "\"name\": \"turn\","
+                                 "\"value\": \"on\""
+                                 "}"
+                                 "}";
 
-    std::string ip = "192.168.1.100"; // We need target IP here
-    int port = 12345;                 // Target port here later
+    string ip = "192.168.1.100"; // We need target IP here
+    int port = 4003;             // Target port here later
 
-    if (noise_level < -80) // Adjust threshold if need!
+    if (noise_level < -80) // Adjust threshold if needed!
     {
         logmsg(begin, &alttv, &logfile, "Network noise is low. Using UDP.", true);
         send_udp_packet(message, ip, port);
