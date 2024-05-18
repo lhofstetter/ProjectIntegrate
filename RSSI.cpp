@@ -4,7 +4,7 @@
 
 void getDeviceID(pcap_if_t **all_devs, pcap_if_t **node_curr, char error_buff[], char **devID, bool debug);
 //void packet_handler(u_char* args, const struct pcap_pkthdr* packet_header, const u_char* packet_data);
-void *sniffer();
+void *sniffer(pcap_t **handler, pcap_pkthdr **phead);
 
 int main() {
 
@@ -16,18 +16,23 @@ int main() {
     /* Parameters for packet capture */
     pcap_t *dev_handler; /* Handler for reading pkt data */
     // const u_char *packet; /* Holds bytes of data from pkt */
-    // struct pcap_pkthdr packet_header; /* Packet struct */
+    struct pcap_pkthdr packet_header; /* Packet struct */
     // int packet_count_limit = 0; /* Number of packets to capture 0 = unlimited */
     // int timeout_limit = 10000;  /* Timeout delay */
 
     char error_buffer[PCAP_ERRBUF_SIZE]; /* Error buffer */
 
+    /* Find the network device and open/activate it for listening */
     getDeviceID(&alldevs,&node,error_buffer,&dev_ID,false);
 
     if( (dev_handler = pcap_create(dev_ID,error_buffer)) == NULL){
         printf("Error creating handler %s\n",error_buffer);
         exit(1);
     }
+
+    pcap_set_snaplen(dev_handler, 2048); /* Snapshot length */
+    pcap_set_rfmon(dev_handler,1);
+    pcap_set_timeout(dev_handler,512); /* 512ms timeout */
 
     int err = pcap_activate(dev_handler);
 
@@ -37,15 +42,13 @@ int main() {
         printf("Device handler activated with warnings!\n");
     }else{
         printf("Device handler activation failed!\n");
+        pcap_close(dev_handler);
         exit(1);
     }
 
-
-//     //Need threads one for listening, other for other tasks
-
-//     pthread_t sniff;
-
-//     pthread_create(&sniff,NULL,sniffer,/*args*/);
+    /* Threads for running the sniffer and main */
+    //pthread_t sniff;
+   // pthread_create(&sniff,NULL,sniffer,dev_handler, packet_header);
 
 //     /*
 //     Use pcap_loop to constantly listen for packets
@@ -123,6 +126,11 @@ void getDeviceID(pcap_if_t **all_devs, pcap_if_t **node_curr, char error_buff[],
         printf("Error finding device %s\n",error_buff);
         exit(1);
     }
+}
+
+void *sniffer(pcap_t **handler, pcap_pkthdr **phead){
+
+ //   pcap_loop(*handler,);
 }
 
 // void packet_handler(u_char* args, const struct pcap_pkthdr* packet_header, const u_char* packet_data){
