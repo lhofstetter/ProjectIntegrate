@@ -2,53 +2,44 @@
 #include <pcap.h>
 #include <pthread.h>
 
-void getDeviceID(pcap_if_t * node, pcap_if_t *all_dev, char error_buff[]);
-void packet_handler(u_char* args, const struct pcap_pkthdr* packet_header, const u_char* packet_data);
+void getDeviceID(pcap_if_t **all_devs, pcap_if_t **node_curr, char error_buff[], char **devID, bool debug);
+//void packet_handler(u_char* args, const struct pcap_pkthdr* packet_header, const u_char* packet_data);
 void *sniffer();
 
 int main() {
 
     /* Parameters for device recognition */
     pcap_if_t *alldevs; /* List that holds all network devices */
-    pcap_if_t *node;
-    pcap_if_t test;
+    pcap_if_t *node; /* Node used for sniffing */
     char *dev_ID; /* Name of device */
-    char error_buffer[PCAP_ERRBUF_SIZE]; /* Error buffer */
-
-
 
     /* Parameters for packet capture */
     pcap_t *dev_handler; /* Handler for reading pkt data */
-    const u_char *packet; /* Holds bytes of data from pkt */
-    struct pcap_pkthdr packet_header; /* Packet struct */
-    int packet_count_limit = 0; /* Number of packets to capture 0 = unlimited */
-    int timeout_limit = 10000;  /* Timeout delay */
+    // const u_char *packet; /* Holds bytes of data from pkt */
+    // struct pcap_pkthdr packet_header; /* Packet struct */
+    // int packet_count_limit = 0; /* Number of packets to capture 0 = unlimited */
+    // int timeout_limit = 10000;  /* Timeout delay */
 
-    if( pcap_findalldevs(&alldevs, error_buffer) == 0 ){
-        printf("Network Devices Found\n");
-        node = alldevs;
-        while (node -> next != NULL) {
-            printf("Name of device is %s \n", node->name);
-            if( (node -> flags & PCAP_IF_WIRELESS) && (node -> flags & PCAP_IF_CONNECTION_STATUS_DISCONNECTED)){
-                dev_ID = node->name;
-                break;
-            }
-            node = node -> next;
-        }
-    }else{  /* Device not found */
-        printf("Error finding device %s\n",error_buffer);
+    char error_buffer[PCAP_ERRBUF_SIZE]; /* Error buffer */
+
+    getDeviceID(&alldevs,&node,error_buffer,&dev_ID,false);
+
+    if( (dev_handler = pcap_create(dev_ID,error_buffer)) == NULL){
+        printf("Error creating handler %s\n",error_buffer);
         exit(1);
     }
-    //dev_handler = pcap_create(dev_ID,error_buffer);
-    //ACTIVATE
 
+    int err = pcap_activate(dev_handler);
 
-//     /* Get the wireless device */
-//     getDeviceID(node, all_dev, error_buffer);
+    if( err == 0){
+        printf("Device handler activated sucessfully!\n");
+    }else if( err > 0 ){
+        printf("Device handler activated with warnings!\n");
+    }else{
+        printf("Device handler activation failed!\n");
+        exit(1);
+    }
 
-//     /* Open dev_ID for receiving packets */
-//     dev_handler = pcap_create(dev_ID, error_buffer);
-//     pcap_activate(dev_handler);
 
 //     //Need threads one for listening, other for other tasks
 
@@ -115,17 +106,18 @@ int main() {
     return 0;
 }
 
-void getDeviceID(pcap_if_t * node, pcap_if_t *all_dev, char error_buff[]){
-    bool status;
-    status = pcap_findalldevs(&all_dev, error_buff); /* Get list of networn devices */
-    if(!status){ /* Device found sucessfully */
-        printf("Network Device Found\n");
-        node = all_dev;
-        while (node -> next != NULL) {
-            if( (node -> flags & PCAP_IF_WIRELESS) && (node -> flags & PCAP_IF_CONNECTION_STATUS_DISCONNECTED)){
+void getDeviceID(pcap_if_t **all_devs, pcap_if_t **node_curr, char error_buff[], char **devID, bool debug){
+    if( pcap_findalldevs(all_devs, error_buff) == 0 ){
+        printf("Network Devices Found\n");
+        *node_curr = *all_devs;
+        while ((*node_curr) -> next != NULL) {
+            if(debug==true)
+                printf("Name of device is %s \n", (*node_curr)->name);
+            if( ((*node_curr) -> flags & PCAP_IF_WIRELESS) && ((*node_curr) -> flags & PCAP_IF_CONNECTION_STATUS_DISCONNECTED)){
+                *devID = (*node_curr)->name;
                 break;
             }
-            node = node -> next;
+            *node_curr = (*node_curr) -> next;
         }
     }else{  /* Device not found */
         printf("Error finding device %s\n",error_buff);
@@ -133,9 +125,9 @@ void getDeviceID(pcap_if_t * node, pcap_if_t *all_dev, char error_buff[]){
     }
 }
 
-void packet_handler(u_char* args, const struct pcap_pkthdr* packet_header, const u_char* packet_data){
+// void packet_handler(u_char* args, const struct pcap_pkthdr* packet_header, const u_char* packet_data){
 
-    //static_cast<int>(packet_data[22])
-    //Print signal strength here
-    printf(" ");
-}
+//     //static_cast<int>(packet_data[22])
+//     //Print signal strength here
+//     printf(" ");
+// }
