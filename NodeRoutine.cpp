@@ -64,7 +64,7 @@ int get_noise_level(const std::string &interface)
     std::string command = "iwconfig " + interface;
     std::string output = exec(command.c_str());
 
-    std::regex noise_regex(R"(Noise level=(-?\d+))");
+    std::regex noise_regex("(Noise level=(-?\\d+))");
     std::smatch match;
     int noise_level = -1;
 
@@ -204,38 +204,38 @@ int main()
 
     */
 
-    string msg = "{\n type:\"pairing\",\n noise:" + to_string(placeholder_noise) + "\n}";
-
     sockaddr_in6 broadcast;
-    in6_addr broadcast_addr;
+    struct in6_addr broadcast_addr;
+    
+    inet_pton(AF_INET6, "ff02::1", &broadcast_addr);
 
-    unsigned char buf[sizeof(struct in6_addr)];
+    broadcast.sin6_addr = broadcast_addr;
+    broadcast.sin6_family = AF_INET6;
+    broadcast.sin6_port = htons(PAIRING_PORT);
+    char * msg;
+    sprintf(msg, "{\n type:\"pairing\",\n noise:%d\n}", placeholder_noise);
 
-    inet_pton(AF_INET6, "ff02::1", buf);
+    const sockaddr *generic_addr = reinterpret_cast<const sockaddr *>(&broadcast);
 
-    while ((epoch_double(&alttv) - connection_wait_begin) < DEFAULT_WAIT)
-    { // waiting for other nodes to pair
-        if (recvfrom(sockfd, node_message, sizeof(node_message), 0, (struct sockaddr *)&client_address, &client_struct_size) > 0)
-        {
+    sendto(sockfd, msg, sizeof(msg), 0, (const sockaddr *) generic_addr, sizeof(generic_addr));
+
+   while ((epoch_double(&alttv) - connection_wait_begin) < DEFAULT_WAIT) { // waiting for other nodes to pair
+        if (recvfrom(sockfd, node_message, sizeof(node_message), 0, (struct sockaddr *)&client_address, &client_struct_size) > 0) {
             // look for IS_PARENT: TRUE,
             string parent_line;
             int i = 3; // starting byte of actual packet data (after {\n )
-            for (; i < 18; i++)
-            {
+            for (; i < 18; i++) {
                 parent_line += string(1, node_message[i]);
             }
 
-            if (parent_line == "IS_PARENT: TRUE")
-            {
-                logmsg(begin, &alttv, &logfile, "Parent node detected. Beginning pairing process...", true);
-                break;
-            }
-            else
-            {
+            logmsg(begin, &alttv, &logfile, "Parent node detected. Beginning pairing process...", true);
+            break;
                 // not the parent, so must be another node looking to pair with parent. Ignore the message
-                memset(node_message, '\0', sizeof(node_message));
-            }
-        }
+            memset(node_message, '\0', sizeof(node_message));
+
+        } else {
+            sendto(sockfd, msg, sizeof(msg), 0, (const sockaddr *) generic_addr, sizeof(generic_addr));
+        } 
     }
 
     if (node_message[0] == '\0')
