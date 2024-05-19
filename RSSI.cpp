@@ -47,24 +47,21 @@ int main()
     if( err == 0){
         printf("Device handler activated sucessfully!\n");
     }else if (err > 0){
-        printf("Device handler activated with warnings!\n");
+        pcap_perror(sniffArgs.dev_handler,"Device handler activated with warnings!");
     }else{
-        printf("Device handler activation failed!\n");
+        pcap_perror(sniffArgs.dev_handler,"Device handler activation failed!");
         pcap_close(sniffArgs.dev_handler);
         exit(1);
     }
     
     /* Threads for running the sniffer and main */
-   // pthread_t packet_consumer;
+    //pthread_t packet_consumer;
     //pthread_t packet_producer;
-
-   // pthread_create(&packet_producer,NULL,sniffer, &sniffArgs);
+    //pthread_create(&packet_producer,NULL,sniffer, &sniffArgs);
     //pthread_create(&packet_consumer,NULL,analyzer, &sniffArgs.packet_header);
 
-    //while(1){
-        pcap_loop(sniffArgs.dev_handler,5,my_callback,NULL);
+    pcap_loop(sniffArgs.dev_handler,5,my_callback,NULL);
 
-   // }
     /*
     Use pcap_loop to constantly listen for packets
     Once a packet is received, search for the OSI, 
