@@ -197,7 +197,7 @@ void *child_node(void *arg)
     int noise_level = get_noise_level("wlan0"); // change einterface
 
     // some sort of details here
-    handle_communication(message, ip, port, noise_level);
+    // handle_communication(message, ip, port, noise_level);
     return NULL;
 }
 
