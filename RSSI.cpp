@@ -3,115 +3,91 @@
 #include <pthread.h>
 
 void getDeviceID(pcap_if_t **all_devs, pcap_if_t **node_curr, char error_buff[], char **devID, bool debug);
-// void packet_handler(u_char* args, const struct pcap_pkthdr* packet_header, const u_char* packet_data);
-void *sniffer(void *args);
-void *analyzer(void *args);
+//void packet_handler(u_char* args, const struct pcap_pkthdr* packet_header, const u_char* packet_data);
+//void *sniffer(void *args);
+//void *analyzer(void *args);
 
-int main()
-{
+void my_callback(u_char *user,const struct pcap_pkthdr* header,const u_char* bytes);
 
-    /* Parameters for device recognition */
+/* Struct for packet capture */
+struct sniffer{
+    pcap_t *dev_handler;    /* Handler for reading pkt data */
+    struct pcap_pkthdr * packet_header; /* Packet struct */
+    // const u_char *packet; /* Holds bytes of data from pkt */
+}sniffArgs;
+
+/* Parameters for device recognition */
+struct deviceInfo{
     pcap_if_t *alldevs; /* List that holds all network devices */
     pcap_if_t *node;    /* Node used for sniffing */
     char *dev_ID;       /* Name of device */
-
-    /* Parameters for packet capture */
-    pcap_t *dev_handler; /* Handler for reading pkt data */
-    // const u_char *packet; /* Holds bytes of data from pkt */
-    struct pcap_pkthdr packet_header; /* Packet struct */
-
     char error_buffer[PCAP_ERRBUF_SIZE]; /* Error buffer */
+}devRecog;
 
-    getDeviceID(&alldevs, &node, error_buffer, &dev_ID, false);
+/* Main Function */
+int main()
+{
+    /* Get wireless devices info */
+    getDeviceID(&devRecog.alldevs, &devRecog.node, devRecog.error_buffer, &devRecog.dev_ID, true);
 
-    if ((dev_handler = pcap_create(dev_ID, error_buffer)) == NULL)
+    /* Create the handler to begin setup */
+    if ((sniffArgs.dev_handler = pcap_create(devRecog.dev_ID, devRecog.error_buffer)) == NULL)
     {
-        printf("Error creating handler %s\n", error_buffer);
+        printf("Error creating handler %s\n", devRecog.error_buffer);
         exit(1);
     }
 
-    pcap_set_snaplen(dev_handler, 2048); /* Snapshot length */
-    pcap_set_rfmon(dev_handler, 1);      /* Monitor Mode */
-    pcap_set_timeout(dev_handler, 512);  /* 512ms timeout */
+    /* Set the default values for the handler */
+    pcap_set_snaplen(sniffArgs.dev_handler, 2048); /* Snapshot length */
+    pcap_set_rfmon(sniffArgs.dev_handler,1);  /* Monitor Mode */
+    pcap_set_timeout(sniffArgs.dev_handler,512); /* 512ms timeout */
 
-    int err = pcap_activate(dev_handler);
-    if (err == 0)
-    {
+    /* Activate the handler to begin looping */
+    int err = pcap_activate(sniffArgs.dev_handler);
+    if( err == 0){
         printf("Device handler activated sucessfully!\n");
-    }
-    else if (err > 0)
-    {
+    }else if (err > 0){
         printf("Device handler activated with warnings!\n");
-    }
-    else
-    {
+    }else{
         printf("Device handler activation failed!\n");
-        pcap_close(dev_handler);
+        pcap_close(sniffArgs.dev_handler);
         exit(1);
     }
-
+    
     /* Threads for running the sniffer and main */
-    pthread_t packet_consumer;
-    pthread_t packet_producer;
+   // pthread_t packet_consumer;
+    //pthread_t packet_producer;
 
-    pthread_create(&packet_producer, NULL, sniffer, (void *)dev_handler, packet_header);
-    pthread_create(&packet_consumer, NULL, analyzer, packet_header);
+   // pthread_create(&packet_producer,NULL,sniffer, &sniffArgs);
+    //pthread_create(&packet_consumer,NULL,analyzer, &sniffArgs.packet_header);
 
-    while (1)
-    {
-    }
-    //     /*
-    //     Use pcap_loop to constantly listen for packets
-    //     Once a packet is received, search for the OSI,
-    //     if the OSI is APPLE or SAMSUNG or GOOGLE
-    //         then grab the MAC address and IP address of this packet and store
-    //         these value somewhere.
+    //while(1){
+        pcap_loop(sniffArgs.dev_handler,5,my_callback,NULL);
 
-    //     Using the IP addresses from the list.  Listen to packets
-    //     if you found a packet with that MAC address
-    //         get it, seearch for the signal strength value and
-    //         send this value back to the parent node
+   // }
+    /*
+    Use pcap_loop to constantly listen for packets
+    Once a packet is received, search for the OSI, 
+    if the OSI is APPLE or SAMSUNG or GOOGLE
+        then grab the MAC address and IP address of this packet and store 
+        these value somewhere.
+    
 
-    //     Do not need to implement socket logic.
+        Using the IP addresses from the list.  Listen to packets
+        if you found a packet with that MAC address
+            get it, seearch for the signal strength value and
+            send this value back to the parent node
 
-    //     dev_handler = pcap_open_live(
-    //         dev_ID,
-    //         BUFSIZ,
-    //         packet_count_limit,
-    //         timeout_limit,
-    //         error_buffer
-    //     );
+        Do not need to implement socket logic.
 
-    //     packet = pcap_next(dev_handler,&packet_header);
+   */
+  
 
-    //     if(!packet){
-    //         return 1;
-    //     }
-
-    //     char errbuf[PCAP_ERRBUF_SIZE];
-    //     pcap_t* handle;
-
-    //     // Open the network interface for packet capturing
-    //     handle = pcap_open_live("your_network_interface", BUFSIZ, 1, 1000, errbuf);
-    //     if (handle == NULL) {
-    //         std::cerr << "Couldn't open device: " << errbuf << std::endl;
-    //         return 1;
-    //     }
-
-    //     // Set a filter to capture only Wi-Fi packets if needed
-    //     struct bpf_program fp;
-    //     pcap_compile(handle, &fp, "wlan", 0, PCAP_NETMASK_UNKNOWN);
-    //     pcap_setfilter(handle, &fp);
-
-    //     // Start capturing packets and call packet_handler for each packet
-    //     pcap_loop(handle, 0, packet_handler, NULL);
-
-    // */
     /* Close Packet Handler */
-    pthread_join(packet_consumer, NULL);
-    pthread_join(packet_producer, NULL);
+    // pthread_join(packet_consumer, NULL);
+    // pthread_join(packet_producer, NULL);
 
-    pcap_close(dev_handler);
+    pcap_close(sniffArgs.dev_handler);
     return 0;
 }
 
@@ -140,15 +116,27 @@ void getDeviceID(pcap_if_t **all_devs, pcap_if_t **node_curr, char error_buff[],
     }
 }
 
-void *sniffer(void *args)
-{
-    // pcap_t **handler, pcap_pkthdr **phead
-    //    pcap_loop(*handler,);
+// void *sniffer(void *args){
+// //pcap_t **handler, pcap_pkthdr **phead
+//  //   pcap_loop(*handler,);
+
+//  //     // Start capturing packets and call packet_handler for each packet
+//     //     pcap_loop(handle, 0, packet_handler, NULL);
+//       //     // Set a filter to capture only Wi-Fi packets if needed
+//     //     struct bpf_program fp;
+//     //     pcap_compile(handle, &fp, "wlan", 0, PCAP_NETMASK_UNKNOWN);
+//     //     pcap_setfilter(handle, &fp);
+// }
+
+void my_callback(u_char *user,const struct pcap_pkthdr* header,const u_char* bytes){
+    printf("Test\n");
+    
 }
 
-void *analyzer(void *args)
-{
-}
+
+// void *analyzer(void *args){
+
+// }
 
 // void packet_handler(u_char* args, const struct pcap_pkthdr* packet_header, const u_char* packet_data){
 
