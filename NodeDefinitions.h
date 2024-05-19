@@ -22,6 +22,7 @@
 #include <string>
 #include <regex>
 #include <map>
+#include <pthread.h>
 
 #define PAIRING_PORT 8082
 #define DEFAULT_WAIT 10.0
@@ -34,5 +35,9 @@ void send_udp_packet(const std::string &message, const std::string &ip, int port
 void send_tcp_packet(const std::string &message, const std::string &ip, int port);
 std::string exec(const char *cmd);
 int get_noise_level(const std::string &interface);
+
+// Parent child nodes here
+void *parent_node(void *arg);
+void *child_node(void *arg);
 
 #endif // End Macro guard (we can take off if there are issues)
