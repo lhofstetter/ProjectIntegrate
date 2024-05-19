@@ -37,5 +37,7 @@ int get_noise_level(const std::string &interface);
 void *parent_node(void *arg);
 void *child_node(void *arg);
 void govee_api_call();
+void handle_communication();
+void *child_node(void *arg);
 
 #endif

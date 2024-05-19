@@ -1,4 +1,3 @@
-// Constant Definitions
 #include "NodeDefinitions.h"
 
 using namespace std;
@@ -178,13 +177,35 @@ void *parent_node(void *arg)
     govee_api_call();
     return NULL;
 }
+void handle_communication(const string &message, const string &ip, int port, int noise_level)
+{
+    if (noise_level < -80)
+    { // Check noise level and decide communication protocol
+        cout << "Low noise level detected. Using UDP for communication." << endl;
+        send_udp_packet(message, ip, port);
+    }
+    else
+    {
+        cout << "High noise level detected. Using TCP for communication." << endl;
+        send_tcp_packet(message, ip, port);
+    }
+}
+void *child_node(void *arg)
+{
+    cout << "Child node thread running." << endl;
+
+    int noise_level = get_noise_level("wlan0"); // change einterface
+
+    // some sort of details here
+    handle_communication(message, ip, port, noise_level);
+    return NULL;
+}
 
 int main()
 {
     cout << "-------------------------- Project Integrate --------------------------" << endl;
     fstream logfile;
-    struct timespec tv;
-    struct timespec alttv;
+    struct timespec tv, alttv;
     double begin = epoch_double(&tv); // get timestamp for logging log message times.
 
     char node_message[200];
@@ -237,137 +258,98 @@ int main()
 
     sockaddr_in6 broadcast;
     struct in6_addr broadcast_addr;
-
     inet_pton(AF_INET6, "ff02::1", &broadcast_addr);
 
     broadcast.sin6_addr = broadcast_addr;
     broadcast.sin6_family = AF_INET6;
     broadcast.sin6_port = htons(PAIRING_PORT);
-    char *msg;
+    char msg[128];
     sprintf(msg, "{\n type:\"pairing\",\n noise:%d\n}", placeholder_noise);
 
     const sockaddr *generic_addr = reinterpret_cast<const sockaddr *>(&broadcast);
 
-    sendto(sockfd, msg, sizeof(msg), 0, (const sockaddr *)generic_addr, sizeof(generic_addr));
+    sendto(sockfd, msg, sizeof(msg), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
+
+    pthread_t parent_thread, child_thread;
 
     while ((epoch_double(&alttv) - connection_wait_begin) < DEFAULT_WAIT)
-    { // waiting for other nodes to pair
+    {
         if (recvfrom(sockfd, node_message, sizeof(node_message), 0, (struct sockaddr *)&client_address, &client_struct_size) > 0)
         {
-            // look for IS_PARENT: TRUE,
             map<string, string> packet = parse_json(node_message);
-            auto key_value = packet.find("socket_to_communicate");
-
-            if (key_value != packet.end())
+            if (packet.find("socket_to_communicate") != packet.end())
             {
-                logmsg(begin, &alttv, &logfile, "Parent node detected. Beginning pairing process...", true);
+                pthread_create(&parent_thread, NULL, parent_node, NULL);
+                pthread_join(parent_thread, NULL);
                 break;
             }
-            // not the parent, so must be another node. Ignore the message
-            memset(node_message, '\0', sizeof(node_message));
         }
         else
         {
-            sendto(sockfd, msg, sizeof(msg), 0, (const sockaddr *)generic_addr, sizeof(generic_addr));
+            sendto(sockfd, msg, sizeof(msg), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
         }
     }
 
     if (node_message[0] == '\0')
     {
         logmsg(begin, &alttv, &logfile, "No node found. Assuming current node is parent.", true);
-
         char errbuf[PCAP_ERRBUF_SIZE];
         pcap_if_t *devices;
 
         if (pcap_findalldevs(&devices, errbuf) == PCAP_ERROR)
         {
-            logmsg(begin, &alttv, &logfile, "ERROR: findalldevs call failed. \n Defaulting to " + string(DEFAULT_INTERFACE) + " will result in decreased effectiveness of system, and is currently unsupported. Please reboot the Pi.", true, 2);
+            logmsg(begin, &alttv, &logfile, "ERROR: findalldevs call failed. Defaulting to " + string(DEFAULT_INTERFACE) + " will result in decreased effectiveness of system, and is currently unsupported. Please reboot the Pi.", true, 2);
             logfile.close();
             close(sockfd);
             exit(1);
         }
-        else
+
+        pcap_if_t *node = devices;
+        while (node != NULL && !(node->flags & PCAP_IF_WIRELESS))
         {
-            pcap_if_t *node = devices;
-            while (node->next != NULL)
+            node = node->next;
+        }
+
+        if (node != NULL)
+        {
+            char *interface = node->name;
+            logmsg(begin, &alttv, &logfile, "Interface using wireless adapter found under " + string(interface) + ".", false);
+            pcap_t *device = pcap_create(interface, errbuf);
+            pcap_setnonblock(device, 0, errbuf);
+
+            if (pcap_can_set_rfmon(device) <= 0)
             {
-                if ((node->flags & PCAP_IF_WIRELESS) && (node->flags & PCAP_IF_CONNECTION_STATUS_DISCONNECTED))
-                {
-                    break;
-                }
-                node = node->next;
+                logmsg(begin, &alttv, &logfile, "ERROR: " + string(interface) + " is incapable of monitor mode. Please double check driver install.", true, 2);
+                pcap_freealldevs(devices);
+                logfile.close();
+                close(sockfd);
+                exit(1);
             }
-
-            if (node->next != NULL)
+            else
             {
-                char *interface = node->name;
-                logmsg(begin, &alttv, &logfile, "Interface using wireless adapter found under " + string(interface) + ".", false);
-                pcap_t *device = pcap_create(interface, errbuf);
-                pcap_setnonblock(device, 0, errbuf);
-
-                if (pcap_can_set_rfmon(device) <= 0)
+                if (pcap_set_rfmon(device, 1) != 0)
                 {
-                    logmsg(begin, &alttv, &logfile, "ERROR: " + string(interface) + " is incapable of monitor mode. Please double check driver install.", true, 2);
+                    logmsg(begin, &alttv, &logfile, "ERROR: Failed to set monitor mode on " + string(interface) + ". Please double check driver install or reboot Pi.", true, 2);
                     pcap_freealldevs(devices);
                     logfile.close();
                     close(sockfd);
                     exit(1);
                 }
-                else
-                {
-                    if (pcap_set_rfmon(device, 1) != 0)
-                    {
-                        logmsg(begin, &alttv, &logfile, "ERROR: Failed to set monitor mode on " + string(interface) + ". Please double check driver install or reboot Pi.", true, 2);
-                        pcap_freealldevs(devices);
-                        logfile.close();
-                        close(sockfd);
-                        exit(1);
-                    }
-                }
             }
-            else
-            {
-                logmsg(begin, &alttv, &logfile, "ERROR: No alternate wireless adapter found. Using " + string(DEFAULT_INTERFACE) + " will result in decreased effectiveness of system, and is currently unsupported. Please plug in the wireless adapter and reboot the Pi.", true, 2);
-
-                logfile.close();
-                close(sockfd);
-                pcap_freealldevs(devices);
-                exit(1);
-            }
+        }
+        else
+        {
+            logmsg(begin, &alttv, &logfile, "ERROR: No alternate wireless adapter found. Using " + string(DEFAULT_INTERFACE) + " will result in decreased effectiveness of system, and is currently unsupported. Please plug in the wireless adapter and reboot the Pi.", true, 2);
+            pcap_freealldevs(devices);
+            logfile.close();
+            close(sockfd);
+            exit(1);
         }
     }
     else
     {
-        logmsg(begin, &alttv, &logfile, "Node detected.", true);
-        // send data through socket to address of parent
-    }
-
-    int noise_level = get_noise_level("wlan0"); // Add wireless interface here
-
-    string api_key = "your_api_key";     // API KEY HERE
-    string device_id = "your_device_id"; // Figure out how we are using device ID
-    string message = "{"
-                     "\"device\": \"" +
-                     device_id + "\","
-                                 "\"model\": \"H6008\","
-                                 "\"cmd\": {"
-                                 "\"name\": \"turn\","
-                                 "\"value\": \"on\""
-                                 "}"
-                                 "}";
-
-    string ip = "192.168.1.100"; // We need target IP here
-    int port = 4003;             // Target port here later
-
-    if (noise_level < -80) // Adjust threshold if needed!
-    {
-        logmsg(begin, &alttv, &logfile, "Network noise is low. Using UDP.", true);
-        send_udp_packet(message, ip, port);
-    }
-    else
-    {
-        logmsg(begin, &alttv, &logfile, "Network noise is high. Using TCP.", true);
-        send_tcp_packet(message, ip, port);
+        pthread_create(&child_thread, NULL, child_node, NULL);
+        pthread_join(child_thread, NULL);
     }
 
     logfile.close();
