@@ -3,7 +3,7 @@
 #include <pthread.h>
 
 void getDeviceID(pcap_if_t **all_devs, pcap_if_t **node_curr, char error_buff[], char **devID, bool debug);
-//void packet_handler(u_char* args, const struct pcap_pkthdr* packet_header, const u_char* packet_data);
+// void packet_handler(u_char* args, const struct pcap_pkthdr* packet_header, const u_char* packet_data);
 void *sniffer(void *args);
 void *analyzer(void *args);
 
@@ -31,11 +31,12 @@ int main()
     }
 
     pcap_set_snaplen(dev_handler, 2048); /* Snapshot length */
-    pcap_set_rfmon(dev_handler,1);  /* Monitor Mode */
-    pcap_set_timeout(dev_handler,512); /* 512ms timeout */
+    pcap_set_rfmon(dev_handler, 1);      /* Monitor Mode */
+    pcap_set_timeout(dev_handler, 512);  /* 512ms timeout */
 
     int err = pcap_activate(dev_handler);
-    if( err == 0){
+    if (err == 0)
+    {
         printf("Device handler activated sucessfully!\n");
     }
     else if (err > 0)
@@ -53,20 +54,18 @@ int main()
     pthread_t packet_consumer;
     pthread_t packet_producer;
 
-    pthread_create(&packet_producer,NULL,sniffer, (void*)dev_handler, packet_header);
-    pthread_create(&packet_consumer,NULL,analyzer, packet_header);
+    pthread_create(&packet_producer, NULL, sniffer, (void *)dev_handler, packet_header);
+    pthread_create(&packet_consumer, NULL, analyzer, packet_header);
 
-    while(1){
-
-
+    while (1)
+    {
     }
-//     /*
-//     Use pcap_loop to constantly listen for packets
-//     Once a packet is received, search for the OSI, 
-//     if the OSI is APPLE or SAMSUNG or GOOGLE
-//         then grab the MAC address and IP address of this packet and store 
-//         these value somewhere.
-    
+    //     /*
+    //     Use pcap_loop to constantly listen for packets
+    //     Once a packet is received, search for the OSI,
+    //     if the OSI is APPLE or SAMSUNG or GOOGLE
+    //         then grab the MAC address and IP address of this packet and store
+    //         these value somewhere.
 
     //     Using the IP addresses from the list.  Listen to packets
     //     if you found a packet with that MAC address
@@ -107,7 +106,7 @@ int main()
     //     // Start capturing packets and call packet_handler for each packet
     //     pcap_loop(handle, 0, packet_handler, NULL);
 
-// */
+    // */
     /* Close Packet Handler */
     pthread_join(packet_consumer, NULL);
     pthread_join(packet_producer, NULL);
@@ -141,13 +140,14 @@ void getDeviceID(pcap_if_t **all_devs, pcap_if_t **node_curr, char error_buff[],
     }
 }
 
-void *sniffer(void *args){
-//pcap_t **handler, pcap_pkthdr **phead
- //   pcap_loop(*handler,);
+void *sniffer(void *args)
+{
+    // pcap_t **handler, pcap_pkthdr **phead
+    //    pcap_loop(*handler,);
 }
 
-void *analyzer(void *args){
-
+void *analyzer(void *args)
+{
 }
 
 // void packet_handler(u_char* args, const struct pcap_pkthdr* packet_header, const u_char* packet_data){
@@ -156,3 +156,8 @@ void *analyzer(void *args){
 //     //Print signal strength here
 //     printf(" ");
 // }
+
+// one thread for sniffer (send data to node routine)
+// one thread hold OSI save devices we want
+// one thread reliest on list from other list () from sniffer
+// pacap loop call
