@@ -1,0 +1,36 @@
+@startuml
+start
+: Determine if the node is a parent or a child;
+
+if (Is Parent Node?) then (yes)
+    :Initiate Device Recognition;
+    :Start Packet Capture;
+    :Handle Network Errors;
+    :Find and connect to children nodes;
+    :Start monitoring the network;
+    :Determine where lights are;
+    :Generate and maintain list of candidate user devices;
+    :Perform triangulation to determine location of users relative to lights;
+    :Calculate distances;
+    :Assess Network Noise;
+    if (Noise Below Threshold) then (yes)
+        :Use UDP for Communication;
+    else (no)
+        :Use TCP for Communication;
+    endif
+    :Make API calls to Govee AWS cloud to control lights based on proximity;
+    :Return to determining where the lights are;
+else (no)
+    :Initiate Device Recognition;
+    :Start Packet Capture;
+    :Handle Network Errors;
+    :Pair with parent node;
+    :Start monitoring the network;
+    :Decide communication protocol based on noise (TCP or UDP);
+    :Communicate distance data to parent;
+    :Configure based on commands from parent;
+    :Return to network monitoring;
+endif
+
+stop
+@enduml
