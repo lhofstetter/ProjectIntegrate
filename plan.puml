@@ -3,38 +3,33 @@ start
 : Determine if the node is a parent or a child;
 
 if (Is Parent Node?) then (yes)
-    :Initiate Device Recognition;
+    :Find and connect to children nodes;
     :Start Packet Capture;
-    'Explicitly indicating threading
-    partition "Thread 1: Network Operations" {
+    partition "Network Communication" {
         :Continuous Network Monitoring;
         :Handle Network Errors;
+        :Decide communication protocol based on noise;
     }
-    :Find and connect to children nodes;
+    partition "API Communication" {
+        :Make Secure API Calls to control lights;
+        :Handle API Response;
+        --> "Determine where lights are";
+    }
+    :Determine where lights are;
     :Generate and maintain list of candidate user devices;
     :Perform triangulation;
     :Calculate distances;
-    :Assess Network Noise;
-    if (Noise Below Threshold) then (yes)
-        :Use UDP for Communication;
-    else (no)
-        :Use TCP for Communication;
-    endif
-    :Make Secure API Calls;
-    :Return to Network Monitoring;
+    --> "Start Packet Capture"; ' Loop back to continuously adjust and monitor
 else (no)
-    :Initiate Device Recognition;
     :Start Packet Capture;
-    'Explicitly indicating threading
-    partition "Thread 1: Network Operations" {
+    partition "Network Communication" {
         :Continuous Network Monitoring;
         :Handle Network Errors;
+        :Decide communication protocol based on noise;
+        :Communicate distance data to parent;
+        :Configure based on parent commands;
+        --> "Start Packet Capture"; ' Loop back to monitor network and adjust configuration
     }
-    :Pair with parent node;
-    :Decide communication protocol based on noise;
-    :Communicate distance data;
-    :Configure based on parent commands;
-    :Return to Network Monitoring;
 endif
 
 stop
