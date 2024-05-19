@@ -8,9 +8,8 @@
 #include <iostream>
 #include <fstream>
 #include <sys/stat.h>
-#include <sys/types.h>
+#include <sys/types>
 #include <chrono>
-#include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <time.h>
@@ -35,9 +34,8 @@ void send_udp_packet(const std::string &message, const std::string &ip, int port
 void send_tcp_packet(const std::string &message, const std::string &ip, int port);
 std::string exec(const char *cmd);
 int get_noise_level(const std::string &interface);
-
-// Parent child nodes here
 void *parent_node(void *arg);
 void *child_node(void *arg);
+void govee_api_call();
 
-#endif // End Macro guard (we can take off if there are issues)
+#endif
