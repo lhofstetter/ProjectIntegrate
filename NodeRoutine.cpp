@@ -1,6 +1,7 @@
 #include "NodeDefinitions.h"
 
 using namespace std;
+using namespace cpr;
 
 const int placeholder_noise = -75;
 
@@ -157,16 +158,17 @@ void send_tcp_packet(const std::string &message, const std::string &ip, int port
     send(sockfd, message.c_str(), message.size(), 0);
     close(sockfd);
 }
-void govee_api_call()
+// govee_api_call(api_key, device_id, "turn", "on");
+// govee_api_call(api_key, device_id, "turn", "off");
+void govee_api_call(const std::string &api_key, const std::string &device_id, const std::string &action, const std::string &value)
 {
-    string api_key = "need API key here";
-    string device_id = "your_device_id";
-    string message = "{\"device\": \"" + device_id + "\", \"model\": \"H6008\", \"cmd\": {\"name\": \"turn\", \"value\": \"on\"}}";
-    string ip = "192.168.1.100"; // API server IP?????
-    int port = 4003;
+    Url url = "https://developer-api.govee.com/v1/devices/control";
+    Header headers = {{"Content-Type", "application/json"}, {"Govee-API-Key", api_key}};
+    Body body = "{\"device\": \"" + device_id + "\", \"model\": \"H6008\", \"cmd\": {\"name\": \"" + action + "\", \"value\": \"" + value + "\"}}";
 
-    cout << "Sending UDP packet for API call." << endl;
-    send_udp_packet(message, ip, port);
+    Response r = Post(url, headers, body);
+    std::cout << "Status code: " << r.status_code << std::endl;
+    std::cout << "Response body: " << r.text << std::endl;
 }
 
 void *parent_node(void *arg)

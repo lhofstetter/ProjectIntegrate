@@ -22,6 +22,7 @@
 #include <regex>
 #include <map>
 #include <pthread.h>
+#include <cpr/cpr.h>
 
 #define PAIRING_PORT 8082
 #define DEFAULT_WAIT 10.0
