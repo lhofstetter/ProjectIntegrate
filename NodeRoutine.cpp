@@ -160,6 +160,24 @@ void send_tcp_packet(const std::string &message, const std::string &ip, int port
     send(sockfd, message.c_str(), message.size(), 0);
     close(sockfd);
 }
+void govee_api_call()
+{
+    string api_key = "need API key here";
+    string device_id = "your_device_id";
+    string message = "{\"device\": \"" + device_id + "\", \"model\": \"H6008\", \"cmd\": {\"name\": \"turn\", \"value\": \"on\"}}";
+    string ip = "192.168.1.100"; // API server IP?????
+    int port = 4003;
+
+    cout << "Sending UDP packet for API call." << endl;
+    send_udp_packet(message, ip, port);
+}
+
+void *parent_node(void *arg)
+{
+    cout << "Parent node thread running." << endl;
+    govee_api_call();
+    return NULL;
+}
 
 int main()
 {
