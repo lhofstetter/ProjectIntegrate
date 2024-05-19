@@ -9,10 +9,9 @@ const string LML_Types[] = {"type", "noise", "candidate", "signal_data", "device
 map<string, string> parse_json(char *node_msg)
 {
     map<string, string> m;
-
-    static int i;
+    size_t i;
     string current_str = "";
-    for (i = 0; i < sizeof(node_msg); i++)
+    for (i = 0; i < strlen(node_msg); i++)
     {
         current_str += string(1, node_msg[i]);
         if (current_str == "{\n" || current_str == ",\n")
@@ -20,23 +19,22 @@ map<string, string> parse_json(char *node_msg)
             current_str = "";
         }
 
-        static int y;
         if (current_str.length() >= 4)
         {
-            for (y = 0; LML_Types->size(); y++)
+            for (int y = 0; y < sizeof(LML_Types) / sizeof(LML_Types[0]); y++)
             {
-                if (current_str.find(LML_Types[y] + ":"))
+                if (current_str.find(LML_Types[y] + ":") != string::npos)
                 {
                     current_str = "";
-                    static int x;
+                    size_t x;
 
-                    for (x = i; node_msg[x] != '\n'; x++)
+                    for (x = i; node_msg[x] != '\n' && node_msg[x] != '\0'; x++)
                     {
                         current_str += string(1, node_msg[x]);
                     }
 
                     m[LML_Types[y]] = current_str;
-                    i = x + 1;
+                    i = x;
                 }
             }
         }
