@@ -245,7 +245,7 @@ int main()
     address.sin6_addr = in6addr_any;
     address.sin6_port = htons(PAIRING_PORT);
 
-    if (bind(sockfd, (struct sockaddr *)&address, sizeof(address)) < 0)
+    if (::bind(sockfd, (struct sockaddr *)&address, sizeof(address)) < 0)
     {
         logmsg(begin, &alttv, &logfile, "Binding to open port failed. Exiting.", false);
         exit(EXIT_FAILURE);
