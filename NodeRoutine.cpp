@@ -272,16 +272,20 @@ int main()
 
     pthread_t parent_thread, child_thread;
 
+    map<string, string> packet;
+
     while ((epoch_double(&alttv) - connection_wait_begin) < DEFAULT_WAIT)
     {
         if (recvfrom(sockfd, node_message, sizeof(node_message), 0, (struct sockaddr *)&client_address, &client_struct_size) > 0)
         {
-            map<string, string> packet = parse_json(node_message);
+            packet = parse_json(node_message);
             if (packet.find("socket_to_communicate") != packet.end())
             {
                 pthread_create(&parent_thread, NULL, parent_node, NULL);
                 pthread_join(parent_thread, NULL);
                 break;
+            } else if (packet.find("child_flag") != packet.end() && packet["child_flag"] == "true") { // "pairing" with a child in order to get distance from that node
+                //pthread_create()
             }
         }
         else
