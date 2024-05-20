@@ -3,7 +3,7 @@
 using namespace std;
 using namespace cpr;
 
-const int placeholder_noise = -75;
+// const int placeholder_noise = -75;
 
 const string LML_Types[] = {"type", "noise", "candidate", "signal_data", "device", "action", "configure", "port", "protocol", "name_of_device", "devices", "socket_to_communicate", "type_of_socket_used_for_communication", "interval"};
 
@@ -160,7 +160,7 @@ void send_tcp_packet(const std::string &message, const std::string &ip, int port
 }
 // govee_api_call(api_key, device_id, "turn", "on");
 // govee_api_call(api_key, device_id, "turn", "off");
-void govee_api_call(const std::string &api_key, const std::string &device_id, const std::string &action, const std::string &value)
+void govee_api_call(const std::string &api_key = "", const std::string &device_id = "", const std::string &action = "", const std::string &value = "")
 {
     Url url = "https://developer-api.govee.com/v1/devices/control";
     Header headers = {{"Content-Type", "application/json"}, {"Govee-API-Key", api_key}};
@@ -171,12 +171,6 @@ void govee_api_call(const std::string &api_key, const std::string &device_id, co
     std::cout << "Response body: " << r.text << std::endl;
 }
 
-void *parent_node(void *arg)
-{
-    cout << "Parent node thread running." << endl;
-    govee_api_call();
-    return NULL;
-}
 void handle_communication(const string &message, const string &ip, int port, int noise_level)
 {
     if (noise_level < -80)
@@ -190,6 +184,13 @@ void handle_communication(const string &message, const string &ip, int port, int
         send_tcp_packet(message, ip, port);
     }
 }
+void *parent_node(void *arg)
+{
+    cout << "Parent node thread running." << endl;
+    // govee_api_call();
+    return NULL;
+}
+
 void *child_node(void *arg)
 {
     cout << "Child node thread running." << endl;
@@ -245,7 +246,7 @@ int main()
     address.sin6_addr = in6addr_any;
     address.sin6_port = htons(PAIRING_PORT);
 
-    if (bind(sockfd, (struct sockaddr *)&address, sizeof(address)) < 0)
+    if (::bind(sockfd, (struct sockaddr *)&address, sizeof(address)) < 0)
     {
         logmsg(begin, &alttv, &logfile, "Binding to open port failed. Exiting.", false);
         exit(EXIT_FAILURE);
@@ -264,7 +265,7 @@ int main()
     broadcast.sin6_family = AF_INET6;
     broadcast.sin6_port = htons(PAIRING_PORT);
     char msg[128];
-    sprintf(msg, "{\n type:\"pairing\",\n noise:%d\n}", placeholder_noise);
+    // snprintf(msg, "{\n type:\"pairing\",\n noise:%d\n}", placeholder_noise);
 
     const sockaddr *generic_addr = reinterpret_cast<const sockaddr *>(&broadcast);
 
