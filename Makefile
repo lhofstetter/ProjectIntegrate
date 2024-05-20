@@ -1,6 +1,6 @@
 #Compiler Options
 CC = g++
-CFLAGS = -Wall -Wextra -std=c++11
+CFLAGS = -Wall -Wextra -std=c++17
 LDFLAGS = -lpcap -lpthread -lcpr 
 
 #Targets
