@@ -218,6 +218,9 @@ void *root_node(void * /*arg*/)
         for (y = 0; y < pairing_count; y++) {
             // need to add the child's mac address we want to send here, then send it and wait for 10 seconds so that they have enough time to receive and send
             sendto(sock, msg.c_str(), sizeof(msg.c_str()), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
+            sleep(10);
+
+
         }
 
 
@@ -318,28 +321,23 @@ int main()
 
     pthread_t root_thread, sprout_thread;
 
-    while ((epoch_double(&alttv) - connection_wait_begin) < DEFAULT_WAIT)
-    {
-        if (recvfrom(sockfd, node_message, sizeof(node_message), 0, (struct sockaddr *)&client_address, &client_struct_size) > 0)
-        {
-            auto packet = parse_json(node_message);
-            if (packet.find("socket_to_communicate") != packet.end())
-            {
-                pthread_create(&root_thread, NULL, root_node, NULL);
+    while ((epoch_double(&alttv) - connection_wait_begin) < DEFAULT_WAIT) {
+        if (recvfrom(sockfd, node_message, sizeof(node_message), 0, (struct sockaddr *)&client_address, &client_struct_size) > 0) {
+            packet = parse_json(node_message);
+            if (packet.find("socket_to_communicate") != packet.end()) {
+                pthread_create(&sprout_thread, NULL, sprout_node, NULL);
                 // pthread_join(root_thread, NULL);
             }
-            else if (packet.find("sprout_flag") != packet.end() && packet["sprout_flag"] == "true")
-            {
-                pthread_create(&sprout_thread, NULL, sprout_node, NULL);
-                // pthread_join(sprout_thread, NULL);
-            }
-        }
-        else
-        {
+        } else {
             sendto(sockfd, msg, sizeof(msg), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
         }
         usleep(1000);
     }
+
+    // if we've reached here, there is no other node live on the network that we care about (no parent). Start the parent thread.
+    pthread_create(&root_thread, NULL, root_node, NULL);
+
+    /*
 
     if (node_message[0] == '\0')
     {
@@ -396,7 +394,7 @@ int main()
             close(sockfd);
             exit(1);
         }
-    }
+    } */
 
     logfile.close();
     close(sockfd);
