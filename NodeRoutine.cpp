@@ -5,6 +5,8 @@ using namespace cpr;
 
 const string LML_Types[] = {"type", "noise", "candidate", "signal_data", "device", "action", "configure", "port", "protocol", "name_of_device", "devices", "socket_to_communicate", "type_of_socket_used_for_communication", "interval"};
 
+static int pairing_count = 0;
+
 map<string, string> parse_json(char *node_msg)
 {
     map<string, string> m;
@@ -187,10 +189,43 @@ void comms(const string &message, const string &ip, int port, int noise_level)
 void *root_node(void * /*arg*/)
 {
     cout << "Hi I'm Root!" << endl;
-    while (true)
-    {
+    while (true) {
         // ex: govee_api(api_key, device_id, "turn", "on");
         cout << "Root: Network operations" << endl;
+
+        // begin the calibration process
+        int sock = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
+
+        sockaddr_in6 address;
+        address.sin6_family = AF_INET6;
+        address.sin6_addr = in6addr_any;
+        address.sin6_port = htons(PAIRING_PORT);
+
+        ::bind(sock, (struct sockaddr *)&address, sizeof(address));
+
+        sockaddr_in6 broadcast;
+        struct in6_addr broadcast_addr;
+        inet_pton(AF_INET6, "ff02::1", &broadcast_addr);
+
+        broadcast.sin6_addr = broadcast_addr;
+        broadcast.sin6_family = AF_INET6;
+        broadcast.sin6_port = htons(PAIRING_PORT);
+        const sockaddr *generic_addr = reinterpret_cast<const sockaddr *>(&broadcast);
+        string msg = "{\n type:calibration,\n noise:" + to_string(get_noise_level("wlan0")) + ",\n ";
+
+
+        static int y;
+        for (y = 0; y < pairing_count; y++) {
+            // need to add the child's mac address we want to send here, then send it and wait for 10 seconds so that they have enough time to receive and send
+            sendto(sock, msg.c_str(), sizeof(msg.c_str()), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
+        }
+
+
+
+
+
+        
+
         sleep(10);
     }
     return NULL;
@@ -208,6 +243,8 @@ void *sprout_node(void * /*arg*/)
     }
     return NULL;
 }
+
+
 
 int main()
 {
