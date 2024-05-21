@@ -105,7 +105,12 @@ void getDeviceID(pcap_if_t **all_devs, pcap_if_t **node_curr, char error_buff[],
 }
 
 void my_callback(u_char *user,const struct pcap_pkthdr* header,const u_char* bytes){
-    printf("Test %s\n",bytes);
+    for(int i=0; i<header->len; i++){
+        printf("%02x ",bytes[i]);
+        if ((i + 1) % 16 == 0) printf("\n");
+    }
+
+   // printf("Test %s\n",bytes);
   
 }
 
