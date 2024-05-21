@@ -193,6 +193,9 @@ void *root_node(void * /*arg*/)
         // ex: govee_api(api_key, device_id, "turn", "on");
         cout << "Root: Network operations" << endl;
 
+        // implement pairing with children here. 
+
+
         // begin the calibration process
         int sock = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
 
