@@ -4,10 +4,8 @@
 
 void getDeviceID(pcap_if_t **all_devs, pcap_if_t **node_curr, char error_buff[], char **devID, bool debug);
 //void packet_handler(u_char* args, const struct pcap_pkthdr* packet_header, const u_char* packet_data);
-//void *sniffer(void *args);
-//void *analyzer(void *args);
-
 void my_callback(u_char *user,const struct pcap_pkthdr* header,const u_char* bytes);
+void *comms(void *args);
 
 /* Struct for packet capture */
 struct sniffer{
@@ -54,16 +52,13 @@ int main()
         exit(1);
     }
     
-    /* Threads for running the sniffer and main */
-    //pthread_t packet_consumer;
-    //pthread_t packet_producer;
-    //pthread_create(&packet_producer,NULL,sniffer, &sniffArgs);
-    //pthread_create(&packet_consumer,NULL,analyzer, &sniffArgs.packet_header);
+    /* Threads for socket communication */
+    //pthread_t communicator;
+    //pthread_create(&communicator,NULL,analyzer, &sniffArgs.packet_header);
 
     pcap_loop(sniffArgs.dev_handler,5,my_callback,NULL);
 
     /*
-    Use pcap_loop to constantly listen for packets
     Once a packet is received, search for the OSI, 
     if the OSI is APPLE or SAMSUNG or GOOGLE
         then grab the MAC address and IP address of this packet and store 
@@ -81,8 +76,7 @@ int main()
   
 
     /* Close Packet Handler */
-    // pthread_join(packet_consumer, NULL);
-    // pthread_join(packet_producer, NULL);
+    // pthread_join(communicator, NULL);
 
     pcap_close(sniffArgs.dev_handler);
     return 0;
@@ -90,8 +84,7 @@ int main()
 
 void getDeviceID(pcap_if_t **all_devs, pcap_if_t **node_curr, char error_buff[], char **devID, bool debug)
 {
-    if (pcap_findalldevs(all_devs, error_buff) == 0)
-    {
+    if (pcap_findalldevs(all_devs, error_buff) == 0){ /* Device found */
         printf("Network Devices Found\n");
         *node_curr = *all_devs;
         while ((*node_curr)->next != NULL)
@@ -105,42 +98,23 @@ void getDeviceID(pcap_if_t **all_devs, pcap_if_t **node_curr, char error_buff[],
             }
             *node_curr = (*node_curr)->next;
         }
-    }
-    else
-    { /* Device not found */
+    }else{ /* Device not found */
         printf("Error finding device %s\n", error_buff);
         exit(1);
     }
 }
 
-// void *sniffer(void *args){
-// //pcap_t **handler, pcap_pkthdr **phead
-//  //   pcap_loop(*handler,);
-
-//  //     // Start capturing packets and call packet_handler for each packet
-//     //     pcap_loop(handle, 0, packet_handler, NULL);
-//       //     // Set a filter to capture only Wi-Fi packets if needed
-//     //     struct bpf_program fp;
-//     //     pcap_compile(handle, &fp, "wlan", 0, PCAP_NETMASK_UNKNOWN);
-//     //     pcap_setfilter(handle, &fp);
-// }
-
 void my_callback(u_char *user,const struct pcap_pkthdr* header,const u_char* bytes){
-    printf("Test\n");
+    printf("Test %c\n",bytes[22]);
+  
+     //     // Start capturing packets and call packet_handler for each packet
+    //     pcap_loop(handle, 0, packet_handler, NULL);
+      //     // Set a filter to capture only Wi-Fi packets if needed
+    //     struct bpf_program fp;
+    //     pcap_compile(handle, &fp, "wlan", 0, PCAP_NETMASK_UNKNOWN);
+    //     pcap_setfilter(handle, &fp);
     
 }
-
-
-// void *analyzer(void *args){
-
-// }
-
-// void packet_handler(u_char* args, const struct pcap_pkthdr* packet_header, const u_char* packet_data){
-
-//     //static_cast<int>(packet_data[22])
-//     //Print signal strength here
-//     printf(" ");
-// }
 
 // one thread for sniffer (send data to node routine)
 // one thread hold OSI save devices we want
