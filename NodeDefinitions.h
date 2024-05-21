@@ -23,6 +23,7 @@
 #include <map>
 #include <pthread.h>
 #include <cpr/cpr.h>
+#include <sys/resource.h>
 
 #define PAIRING_PORT 8082
 #define DEFAULT_WAIT 10.0
@@ -35,10 +36,10 @@ void send_udp_packet(const std::string &message, const std::string &ip, int port
 void send_tcp_packet(const std::string &message, const std::string &ip, int port);
 std::string exec(const char *cmd);
 int get_noise_level(const std::string &interface);
-void *parent_node(void *arg);
-void *child_node(void *arg);
-void govee_api_call();
-void handle_communication();
-void *child_node(void *arg);
+void *root_node(void *arg);
+void *sprout_node(void *arg);
+void govee_api();
+void comms();
+void *sprout_node(void *arg);
 
 #endif

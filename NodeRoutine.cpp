@@ -3,8 +3,6 @@
 using namespace std;
 using namespace cpr;
 
-// const int placeholder_noise = -75;
-
 const string LML_Types[] = {"type", "noise", "candidate", "signal_data", "device", "action", "configure", "port", "protocol", "name_of_device", "devices", "socket_to_communicate", "type_of_socket_used_for_communication", "interval"};
 
 map<string, string> parse_json(char *node_msg)
@@ -80,7 +78,7 @@ void logmsg(double begin, struct timespec *current_time, fstream *logfile, strin
     if (log_to_console)
         cout << complete_msg << endl;
 }
-// Function to execute a shell command and return its output
+
 std::string exec(const char *cmd)
 {
     std::array<char, 128> buffer;
@@ -97,7 +95,6 @@ std::string exec(const char *cmd)
     return result;
 }
 
-// Function to get the noise level of a network interface
 int get_noise_level(const std::string &interface)
 {
     std::string command = "iwconfig " + interface;
@@ -114,39 +111,42 @@ int get_noise_level(const std::string &interface)
 
     return noise_level;
 }
-// Function to send a UDP packet
+
 void send_udp_packet(const std::string &message, const std::string &ip, int port)
 {
-    int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    int sockfd = socket(AF_INET6, SOCK_DGRAM, 0);
     if (sockfd < 0)
     {
         perror("socket");
         return;
     }
 
-    struct sockaddr_in server_addr;
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(port);
-    inet_pton(AF_INET, ip.c_str(), &server_addr.sin_addr);
+    struct sockaddr_in6 server_addr
+    {
+    };
+    server_addr.sin6_family = AF_INET6;
+    inet_pton(AF_INET6, ip.c_str(), &server_addr.sin6_addr);
+    server_addr.sin6_port = htons(port);
 
     sendto(sockfd, message.c_str(), message.size(), 0, (struct sockaddr *)&server_addr, sizeof(server_addr));
     close(sockfd);
 }
 
-// Function to send a TCP packet
 void send_tcp_packet(const std::string &message, const std::string &ip, int port)
 {
-    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    int sockfd = socket(AF_INET6, SOCK_STREAM, 0);
     if (sockfd < 0)
     {
         perror("socket");
         return;
     }
 
-    struct sockaddr_in server_addr;
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(port);
-    inet_pton(AF_INET, ip.c_str(), &server_addr.sin_addr);
+    struct sockaddr_in6 server_addr
+    {
+    };
+    server_addr.sin6_family = AF_INET6;
+    inet_pton(AF_INET6, ip.c_str(), &server_addr.sin6_addr);
+    server_addr.sin6_port = htons(port);
 
     if (connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0)
     {
@@ -158,9 +158,8 @@ void send_tcp_packet(const std::string &message, const std::string &ip, int port
     send(sockfd, message.c_str(), message.size(), 0);
     close(sockfd);
 }
-// govee_api_call(api_key, device_id, "turn", "on");
-// govee_api_call(api_key, device_id, "turn", "off");
-void govee_api_call(const std::string &api_key = "", const std::string &device_id = "", const std::string &action = "", const std::string &value = "")
+
+void govee_api(const std::string &api_key = "", const std::string &device_id = "", const std::string &action = "", const std::string &value = "")
 {
     Url url = "https://developer-api.govee.com/v1/devices/control";
     Header headers = {{"Content-Type", "application/json"}, {"Govee-API-Key", api_key}};
@@ -171,10 +170,10 @@ void govee_api_call(const std::string &api_key = "", const std::string &device_i
     std::cout << "Response body: " << r.text << std::endl;
 }
 
-void handle_communication(const string &message, const string &ip, int port, int noise_level)
+void comms(const string &message, const string &ip, int port, int noise_level)
 {
     if (noise_level < -80)
-    { // Check noise level and decide communication protocol
+    {
         cout << "Low noise level detected. Using UDP for communication." << endl;
         send_udp_packet(message, ip, port);
     }
@@ -184,21 +183,29 @@ void handle_communication(const string &message, const string &ip, int port, int
         send_tcp_packet(message, ip, port);
     }
 }
-void *parent_node(void *arg)
+
+void *root_node(void *arg)
 {
-    cout << "Parent node thread running." << endl;
-    // govee_api_call();
+    cout << "Hi I'm Root!" << endl;
+    while (true)
+    {
+        // ex: govee_api(api_key, device_id, "turn", "on");
+        cout << "Root: Network operations" << endl;
+        sleep(10);
+    }
     return NULL;
 }
 
-void *child_node(void *arg)
+void *sprout_node(void *arg)
 {
-    cout << "Child node thread running." << endl;
-
-    int noise_level = get_noise_level("wlan0"); // change einterface
-
-    // some sort of details here
-    // handle_communication(message, ip, port, noise_level);
+    cout << "Hi I'm Sprout!" << endl;
+    while (true)
+    {
+        int noise_level = get_noise_level("wlan0"); // Change interface
+        cout << "Sprout: Noise level: " << noise_level << endl;
+        // comms(message, ip, port, noise_level);
+        sleep(10);
+    }
     return NULL;
 }
 
@@ -207,7 +214,7 @@ int main()
     cout << "-------------------------- Project Integrate --------------------------" << endl;
     fstream logfile;
     struct timespec tv, alttv;
-    double begin = epoch_double(&tv); // get timestamp for logging log message times.
+    double begin = epoch_double(&tv);
 
     char node_message[200];
     memset(node_message, '\0', sizeof(node_message));
@@ -265,13 +272,12 @@ int main()
     broadcast.sin6_family = AF_INET6;
     broadcast.sin6_port = htons(PAIRING_PORT);
     char msg[128];
-    // snprintf(msg, "{\n type:\"pairing\",\n noise:%d\n}", placeholder_noise);
 
     const sockaddr *generic_addr = reinterpret_cast<const sockaddr *>(&broadcast);
 
     sendto(sockfd, msg, sizeof(msg), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
 
-    pthread_t parent_thread, child_thread;
+    pthread_t root_thread, sprout_thread;
 
     map<string, string> packet;
 
@@ -282,22 +288,27 @@ int main()
             packet = parse_json(node_message);
             if (packet.find("socket_to_communicate") != packet.end())
             {
-                pthread_create(&parent_thread, NULL, parent_node, NULL);
-                pthread_join(parent_thread, NULL);
+                pthread_create(&root_thread, NULL, root_node, NULL);
+                pthread_detach(root_thread);
                 break;
-            } else if (packet.find("child_flag") != packet.end() && packet["child_flag"] == "true") { // "pairing" with a child in order to get distance from that node
-                //pthread_create()
+            }
+            else if (packet.find("sprout_flag") != packet.end() && packet["sprout_flag"] == "true")
+            {
+                pthread_create(&sprout_thread, NULL, sprout_node, NULL);
+                pthread_detach(sprout_thread);
+                break;
             }
         }
         else
         {
             sendto(sockfd, msg, sizeof(msg), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
         }
+        usleep(1000);
     }
 
     if (node_message[0] == '\0')
     {
-        logmsg(begin, &alttv, &logfile, "No node found. Assuming current node is parent.", true);
+        logmsg(begin, &alttv, &logfile, "No node found. Assuming current node is Root.", true);
         char errbuf[PCAP_ERRBUF_SIZE];
         pcap_if_t *devices;
 
@@ -350,11 +361,6 @@ int main()
             close(sockfd);
             exit(1);
         }
-    }
-    else
-    {
-        pthread_create(&child_thread, NULL, child_node, NULL);
-        pthread_join(child_thread, NULL);
     }
 
     logfile.close();
