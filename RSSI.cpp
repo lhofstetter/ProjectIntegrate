@@ -11,7 +11,7 @@ void *comms(void *args);
 struct sniffer{
     pcap_t *dev_handler;    /* Handler for reading pkt data */
     struct pcap_pkthdr * packet_header; /* Packet struct */
-    // const u_char *packet; /* Holds bytes of data from pkt */
+    const u_char *packet; /* Holds bytes of data from pkt */
 }sniffArgs;
 
 /* Parameters for device recognition */
@@ -91,7 +91,7 @@ void getDeviceID(pcap_if_t **all_devs, pcap_if_t **node_curr, char error_buff[],
         {
             if (debug == true)
                 printf("Name of device is %s \n", (*node_curr)->name);
-            if (((*node_curr)->flags & PCAP_IF_WIRELESS) && ((*node_curr)->flags & PCAP_IF_CONNECTION_STATUS_DISCONNECTED))
+            if (((*node_curr)->flags & PCAP_IF_WIRELESS) && ((*node_curr)->flags & PCAP_IF_CONNECTION_STATUS_DISCONNECTED) && ((*node_curr)->flags & PCAP_IF_RUNNING))
             {
                 *devID = (*node_curr)->name;
                 break;
@@ -105,18 +105,10 @@ void getDeviceID(pcap_if_t **all_devs, pcap_if_t **node_curr, char error_buff[],
 }
 
 void my_callback(u_char *user,const struct pcap_pkthdr* header,const u_char* bytes){
-    printf("Test %c\n",bytes[22]);
+    printf("Test %s\n",bytes);
   
-     //     // Start capturing packets and call packet_handler for each packet
-    //     pcap_loop(handle, 0, packet_handler, NULL);
-      //     // Set a filter to capture only Wi-Fi packets if needed
-    //     struct bpf_program fp;
-    //     pcap_compile(handle, &fp, "wlan", 0, PCAP_NETMASK_UNKNOWN);
-    //     pcap_setfilter(handle, &fp);
-    
 }
 
 // one thread for sniffer (send data to node routine)
 // one thread hold OSI save devices we want
 // one thread reliest on list from other list () from sniffer
-// pacap loop call
