@@ -20,7 +20,7 @@ map<string, string> parse_json(char *node_msg)
 
         if (current_str.length() >= 4)
         {
-            for (int y = 0; y < sizeof(LML_Types) / sizeof(LML_Types[0]); y++)
+            for (size_t y = 0; y < sizeof(LML_Types) / sizeof(LML_Types[0]); y++)
             {
                 if (current_str.find(LML_Types[y] + ":") != string::npos)
                 {
@@ -184,7 +184,7 @@ void comms(const string &message, const string &ip, int port, int noise_level)
     }
 }
 
-void *root_node(void *arg)
+void *root_node(void * /*arg*/)
 {
     cout << "Hi I'm Root!" << endl;
     while (true)
@@ -196,7 +196,7 @@ void *root_node(void *arg)
     return NULL;
 }
 
-void *sprout_node(void *arg)
+void *sprout_node(void * /*arg*/)
 {
     cout << "Hi I'm Sprout!" << endl;
     while (true)
@@ -277,26 +277,24 @@ int main()
 
     sendto(sockfd, msg, sizeof(msg), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
 
-    pthread_t root_thread, sprout_thread;
-
     map<string, string> packet;
+
+    pthread_t root_thread, sprout_thread;
 
     while ((epoch_double(&alttv) - connection_wait_begin) < DEFAULT_WAIT)
     {
         if (recvfrom(sockfd, node_message, sizeof(node_message), 0, (struct sockaddr *)&client_address, &client_struct_size) > 0)
         {
-            packet = parse_json(node_message);
+            auto packet = parse_json(node_message);
             if (packet.find("socket_to_communicate") != packet.end())
             {
                 pthread_create(&root_thread, NULL, root_node, NULL);
-                pthread_detach(root_thread);
-                break;
+                // pthread_join(root_thread, NULL);
             }
             else if (packet.find("sprout_flag") != packet.end() && packet["sprout_flag"] == "true")
             {
                 pthread_create(&sprout_thread, NULL, sprout_node, NULL);
-                pthread_detach(sprout_thread);
-                break;
+                // pthread_join(sprout_thread, NULL);
             }
         }
         else
