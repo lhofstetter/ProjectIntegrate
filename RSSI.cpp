@@ -2,11 +2,11 @@
 #include <pcap.h>
 #include <pthread.h>
 #include <arpa/inet.h>
+#include <string>
 
 void getDeviceID(pcap_if_t **all_devs, pcap_if_t **node_curr, char error_buff[], char **devID, bool debug);
 void my_callback(u_char *user,const struct pcap_pkthdr* header,const u_char* bytes);
 void *comms(void *args);
-
 /* Struct for packet capture */
 struct sniffer{
     pcap_t *dev_handler;    /* Handler for reading pkt data */
@@ -105,7 +105,7 @@ void getDeviceID(pcap_if_t **all_devs, pcap_if_t **node_curr, char error_buff[],
         while ((*node_curr)->next != NULL){
             if (debug == true)
                 printf("Name of device is %s \n", (*node_curr)->name);
-            if (((*node_curr)->flags & PCAP_IF_WIRELESS) && ((*node_curr)->flags & PCAP_IF_CONNECTION_STATUS_DISCONNECTED) && ((*node_curr)->flags & PCAP_IF_RUNNING)){
+            if (((*node_curr)->flags & PCAP_IF_WIRELESS) && ((*node_curr)->flags & PCAP_IF_RUNNING)){
                 *devID = (*node_curr)->name;
                 printf("Device to be used: %s \n", *devID);
                 track = true;
@@ -125,12 +125,20 @@ void getDeviceID(pcap_if_t **all_devs, pcap_if_t **node_curr, char error_buff[],
 }
 
 void my_callback(u_char *user,const struct pcap_pkthdr* header,const u_char* bytes){
-   // for(int i=0; i<header->len; i++){
-      printf("%02x ",bytes[14]);
-     //   if ((i + 1) % 16 == 0) printf("\n");
-    //}
-    printf("\n\n");
-// struct ieee80211_radiotap_header *rt_header;
+    int8_t v = (int8_t)bytes[14];
+    printf("RSSI: %d \n",v);
+    //printf("OUI: %02x %02x %02x ",bytes[109],bytes[110],bytes[111]);
+
+    uint16_t radiotap_len = bytes[2] + (bytes[3] << 8);
+    int mac= radiotap_len + 10;
+    
+    printf("OUI: %02x %02x %02x ",bytes[mac], bytes[mac + 1], bytes[mac + 2]);
+
+    /* Reread the readiotap and if that can be implemented*/
+
+
+
+// struct ieee802_radiotap_header *rt_header;
 //     int rt_header_len;
 
 //     rt_header = (struct ieee80211_radiotap_header *) bytes;
@@ -146,12 +154,6 @@ void my_callback(u_char *user,const struct pcap_pkthdr* header,const u_char* byt
 //         printf("No RSSI information available\n");
 //     }
     printf("\n");
-
-
-
-
-
-
    // printf("Test %s\n",bytes);
   
 }   
