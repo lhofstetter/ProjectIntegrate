@@ -189,13 +189,12 @@ void comms(const string &message, const string &ip, int port, int noise_level)
 void *root_node(void * /*arg*/)
 {
     cout << "Hi I'm Root!" << endl;
-    while (true) {
+    while (true)
+    {
         // ex: govee_api(api_key, device_id, "turn", "on");
         cout << "Root: Network operations" << endl;
 
-        // implement pairing with children here. 
-
-
+        // implement pairing with children here.
 
         // begin the calibration process
         int sock = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
@@ -217,41 +216,53 @@ void *root_node(void * /*arg*/)
         const sockaddr *generic_addr = reinterpret_cast<const sockaddr *>(&broadcast);
         string msg = "{\n type:calibration,\n noise:" + to_string(get_noise_level("wlan0")) + ",\n ";
 
-
         static int y;
-        for (y = 0; y < pairing_count; y++) {
+        for (y = 0; y < pairing_count; y++)
+        {
             // need to add the child's mac address we want to send here, then send it and wait for 10 seconds so that they have enough time to receive and send
             sendto(sock, msg.c_str(), sizeof(msg.c_str()), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
             sleep(10);
 
-
+            // ip
         }
 
+        // after pairing, parent needs to listen to children
 
+        // x=soxkets x=#of children to parents = parent has 3 sockets by default plus pairing socket
+        // one for broad cast and 1 for each of the kids
 
+        // children report their distance from the device
+        // parent knows its distance from device too (user device)
+        // kids knows distance from smart bulkb
 
+        // do trianglulation
 
-        
+        // calculate distances betwen those 2
+
+        // decide which (thresh hold value)
+
+        // api calls to turn on or off lights
+
+        // some sory of logic to turn the lights off
+        // if user leaves this threshhold api call off
 
         sleep(10);
     }
     return NULL;
 }
 
-void *sprout_node(void * /*arg*/)
+void *leaf_node(void * /*arg*/)
 {
-    cout << "Hi I'm Sprout!" << endl;
+    cout << "Hi I'm leaf!" << endl;
     while (true)
     {
         int noise_level = get_noise_level("wlan0"); // Change interface
-        cout << "Sprout: Noise level: " << noise_level << endl;
+        cout << "leaf: Noise level: " << noise_level << endl;
         // comms(message, ip, port, noise_level);
         sleep(10);
     }
     return NULL;
 }
-
-
 
 int main()
 {
@@ -315,30 +326,34 @@ int main()
     broadcast.sin6_addr = broadcast_addr;
     broadcast.sin6_family = AF_INET6;
     broadcast.sin6_port = htons(PAIRING_PORT);
-    string msg = "{\n type: pairing,\n noise:" + to_string(get_noise_level(DEFAULT_INTERFACE)) + "\n}";
+    char msg[128];
 
     const sockaddr *generic_addr = reinterpret_cast<const sockaddr *>(&broadcast);
 
-    sendto(sockfd, msg.c_str(), sizeof(msg), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
+    sendto(sockfd, msg, sizeof(msg), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
 
     map<string, string> packet;
 
-    pthread_t root_thread, sprout_thread;
+    pthread_t root_thread, leaf_thread;
 
-    while ((epoch_double(&alttv) - connection_wait_begin) < DEFAULT_WAIT) {
-        if (recvfrom(sockfd, node_message, sizeof(node_message), 0, (struct sockaddr *)&client_address, &client_struct_size) > 0) {
+    while ((epoch_double(&alttv) - connection_wait_begin) < DEFAULT_WAIT)
+    {
+        if (recvfrom(sockfd, node_message, sizeof(node_message), 0, (struct sockaddr *)&client_address, &client_struct_size) > 0)
+        {
             packet = parse_json(node_message);
-            if (packet.find("socket_to_communicate") != packet.end()) {
-                pthread_create(&sprout_thread, NULL, sprout_node, NULL);
-                // pthread_join(root_thread, NULL);
+            if (packet.find("socket_to_communicate") != packet.end())
+            {
+                pthread_create(&leaf_thread, NULL, leaf_node, NULL);
             }
-        } else {
-            sendto(sockfd, msg.c_str(), sizeof(msg.c_str()), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
         }
-        usleep(1000);
+        else
+        {
+            sendto(sockfd, msg, sizeof(msg), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
+        }
+        sleep(1000);
     }
 
-    // if we've reached here, there is no other node live on the network that we care about (no parent). Start the parent thread.
+    // if we've reached here, there is no other node live on the network that we care about (no root). Start the parent thread.
     pthread_create(&root_thread, NULL, root_node, NULL);
 
     /*
