@@ -1,9 +1,9 @@
 #include <iostream>
 #include <pcap.h>
 #include <pthread.h>
+#include <arpa/inet.h>
 
 void getDeviceID(pcap_if_t **all_devs, pcap_if_t **node_curr, char error_buff[], char **devID, bool debug);
-//void packet_handler(u_char* args, const struct pcap_pkthdr* packet_header, const u_char* packet_data);
 void my_callback(u_char *user,const struct pcap_pkthdr* header,const u_char* bytes);
 void *comms(void *args);
 
@@ -22,6 +22,18 @@ struct deviceInfo{
     char error_buffer[PCAP_ERRBUF_SIZE]; /* Error buffer */
 }devRecog;
 
+
+// Define a structure for the radiotap header
+struct ieee80211_radiotap_header {
+    u_int8_t it_version;     // set to 0
+    u_int8_t it_pad;
+    u_int16_t it_len;        // entire length
+    u_int32_t it_present;    // fields present
+    // Note: actual radiotap data follows
+};
+
+
+
 /* Main Function */
 int main()
 {
@@ -37,7 +49,9 @@ int main()
 
     /* Set the default values for the handler */
     pcap_set_snaplen(sniffArgs.dev_handler, 2048); /* Snapshot length */
-    pcap_set_rfmon(sniffArgs.dev_handler,1);  /* Monitor Mode */
+    if(pcap_can_set_rfmon(sniffArgs.dev_handler)){
+        pcap_set_rfmon(sniffArgs.dev_handler,1);  /* Monitor Mode */
+    }
     pcap_set_timeout(sniffArgs.dev_handler,512); /* 512ms timeout */
 
     /* Activate the handler to begin looping */
@@ -56,7 +70,7 @@ int main()
     //pthread_t communicator;
     //pthread_create(&communicator,NULL,analyzer, &sniffArgs.packet_header);
 
-    pcap_loop(sniffArgs.dev_handler,5,my_callback,NULL);
+    pcap_loop(sniffArgs.dev_handler,30,my_callback,NULL);
 
     /*
     Once a packet is received, search for the OSI, 
@@ -84,16 +98,17 @@ int main()
 
 void getDeviceID(pcap_if_t **all_devs, pcap_if_t **node_curr, char error_buff[], char **devID, bool debug)
 {
+    bool track = false;
     if (pcap_findalldevs(all_devs, error_buff) == 0){ /* Device found */
         printf("Network Devices Found\n");
         *node_curr = *all_devs;
-        while ((*node_curr)->next != NULL)
-        {
+        while ((*node_curr)->next != NULL){
             if (debug == true)
                 printf("Name of device is %s \n", (*node_curr)->name);
-            if (((*node_curr)->flags & PCAP_IF_WIRELESS) && ((*node_curr)->flags & PCAP_IF_CONNECTION_STATUS_DISCONNECTED) && ((*node_curr)->flags & PCAP_IF_RUNNING))
-            {
+            if (((*node_curr)->flags & PCAP_IF_WIRELESS) && ((*node_curr)->flags & PCAP_IF_CONNECTION_STATUS_DISCONNECTED) && ((*node_curr)->flags & PCAP_IF_RUNNING)){
                 *devID = (*node_curr)->name;
+                printf("Device to be used: %s \n", *devID);
+                track = true;
                 break;
             }
             *node_curr = (*node_curr)->next;
@@ -102,17 +117,44 @@ void getDeviceID(pcap_if_t **all_devs, pcap_if_t **node_curr, char error_buff[],
         printf("Error finding device %s\n", error_buff);
         exit(1);
     }
+
+    if(!track){
+        printf("Could not find network device that satifies requirements.\n");
+        exit(1);
+    }
 }
 
 void my_callback(u_char *user,const struct pcap_pkthdr* header,const u_char* bytes){
-    for(int i=0; i<header->len; i++){
-        printf("%02x ",bytes[i]);
-        if ((i + 1) % 16 == 0) printf("\n");
-    }
+   // for(int i=0; i<header->len; i++){
+      printf("%02x ",bytes[14]);
+     //   if ((i + 1) % 16 == 0) printf("\n");
+    //}
+    printf("\n\n");
+// struct ieee80211_radiotap_header *rt_header;
+//     int rt_header_len;
+
+//     rt_header = (struct ieee80211_radiotap_header *) bytes;
+//     rt_header_len = rt_header->it_len;
+
+//     printf("Radiotap Header Length: %d\n", rt_header_len);
+
+//     // RSSI is often found after the radiotap header
+//     if (rt_header_len < header->len) {
+//         u_int8_t rssi = bytes[rt_header_len];
+//         printf("RSSI: %d\n", rssi);
+//     } else {
+//         printf("No RSSI information available\n");
+//     }
+    printf("\n");
+
+
+
+
+
 
    // printf("Test %s\n",bytes);
   
-}
+}   
 
 // one thread for sniffer (send data to node routine)
 // one thread hold OSI save devices we want
