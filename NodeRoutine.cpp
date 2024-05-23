@@ -196,6 +196,7 @@ void *root_node(void * /*arg*/)
         // implement pairing with children here. 
 
 
+
         // begin the calibration process
         int sock = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
 
@@ -314,11 +315,11 @@ int main()
     broadcast.sin6_addr = broadcast_addr;
     broadcast.sin6_family = AF_INET6;
     broadcast.sin6_port = htons(PAIRING_PORT);
-    char msg[128];
+    string msg = "{\n type: pairing,\n noise:" + to_string(get_noise_level(DEFAULT_INTERFACE)) + "\n}";
 
     const sockaddr *generic_addr = reinterpret_cast<const sockaddr *>(&broadcast);
 
-    sendto(sockfd, msg, sizeof(msg), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
+    sendto(sockfd, msg.c_str(), sizeof(msg), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
 
     map<string, string> packet;
 
@@ -332,7 +333,7 @@ int main()
                 // pthread_join(root_thread, NULL);
             }
         } else {
-            sendto(sockfd, msg, sizeof(msg), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
+            sendto(sockfd, msg.c_str(), sizeof(msg.c_str()), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
         }
         usleep(1000);
     }
