@@ -1,0 +1,11 @@
+# Project Integrate
+
+Welcome to Project Integrate. This document is a full system overview of our project, including a detailed explanation of what Integrate does, how it works and the varying technologies used. That being said, please keep in mind that this is a "living" document, and will continue to evolve as the project develops. Things you see here may change, though the underlying logic of the project and the basic technologies used will likely remain the same. 
+
+### What Integrate Does
+
+Project Integrate is a smart home automation system that is built to track user activity and make intelligent decisions based on that activity. In other word's, it's designed to turn on smart devices when the user is in close proximity to them, and turn them off when the user is far away from them. While simple in concept, Integrate has a few advantages over proprietary systems that we believe give it a competitive advantage. These include: 
+- **Simple setup and maintanince:**
+    - Integrate is designed to be simple to install and invisible while operating. The entire system is designed to be forgetten and self-maintaining, allowing users to enjoy it's benefits without worrying about keeping it running.
+- **No user interaction necessary:**
+    - By default, Integrate will only require users to "register" their smart home devices with the system. 
