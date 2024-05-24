@@ -7,7 +7,7 @@ const string LML_Types[] = {"type", "noise", "candidate", "signal_data", "device
 
 static int pairing_count = 0;
 
-map<string, string> parse_json(char *node_msg)
+map<string, string> parse_json(char * node_msg)
 {
     map<string, string> m;
     size_t i;
@@ -189,8 +189,7 @@ void comms(const string &message, const string &ip, int port, int noise_level)
 void *root_node(void * /*arg*/)
 {
     cout << "Hi I'm Root!" << endl;
-    while (true)
-    {
+    while (true) {
         // ex: govee_api(api_key, device_id, "turn", "on");
         cout << "Root: Network operations" << endl;
 
@@ -335,15 +334,16 @@ int main()
     map<string, string> packet;
 
     pthread_t root_thread, leaf_thread;
+    bool am_root_node = true;
 
     while ((epoch_double(&alttv) - connection_wait_begin) < DEFAULT_WAIT)
     {
         if (recvfrom(sockfd, node_message, sizeof(node_message), 0, (struct sockaddr *)&client_address, &client_struct_size) > 0)
         {
             packet = parse_json(node_message);
-            if (packet.find("socket_to_communicate") != packet.end())
-            {
-                pthread_create(&leaf_thread, NULL, leaf_node, NULL);
+            if (packet.find("port_to_communicate") != packet.end()) {
+                am_root_node = false;
+                break;
             }
         }
         else
@@ -353,8 +353,13 @@ int main()
         sleep(1000);
     }
 
+    if (am_root_node) {
+        pthread_create(&root_thread, NULL, root_node, NULL);
+    } else {
+        pthread_create(&leaf_thread, NULL, leaf_node, NULL);
+    }
+
     // if we've reached here, there is no other node live on the network that we care about (no root). Start the parent thread.
-    pthread_create(&root_thread, NULL, root_node, NULL);
 
     /*
 

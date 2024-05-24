@@ -17,12 +17,12 @@
         protocol: 0 | 1 (0 = UDP, 1 = TCP. Port num must also be included. Only used if action = change_protocol)
         ELSE IF type = calibration
         num_of_calibration_packets: int (number of packets for leaves to send in order to see each other),
-        leaf: MAC_ADDR_OF_LEAF_TO_TRANSMIT (any leaf that this isn't their mac address automatically goes into listen mode),
+        leaf: IPv6 address of leaf to communicate (any leaf that doesn't have this address automatically goes into listen mode),
         ELSE
-        socket_to_communicate: socket_number, (only sent if from parent to child)
+        port_to_communicate: port_number, (only sent if from parent to child)
         type_of_socket_used_for_communication: 0 | 1, (0 = UDP, 1 = TCP, allows for flexible transport layer configuration)
         interval: x ms, (interval rate that the node should send data to parent, only sent from parent to child)
-
+        confirmation: true (only sent from child to parent after receiving connection details)
     }
 
 */

@@ -8,4 +8,66 @@ Project Integrate is a smart home automation system that is built to track user 
 - **Simple setup and maintanince:**
     - Integrate is designed to be simple to install and invisible while operating. The entire system is designed to be forgetten and self-maintaining, allowing users to enjoy it's benefits without worrying about keeping it running.
 - **No user interaction necessary:**
-    - By default, Integrate will only require users to "register" their smart home devices with the system. 
+    - By default, Integrate will only require users to "register" their smart home devices with the system. Users don't need to register their personal devices with the system, which means that they don't need to know anything about IP/MAC addresses or any information Integrate uses to track their devices. 
+- **Privacy first:**
+    - No user data leaves the system or the user's network. This keeps user data local, and thus makes it more difficult for a malicious actor to steal data.
+
+All of these factors and more make Integrate a competitive offering in a market that has become increasingly saturated with "basic" smart home devices which offer no real difference between the smart and "unsmart" version of the products. Our system allows users to stop worrying about leaving devices on or managing automation across multiple platforms, instead choosing to interface with the smart devices directly using their API's and reducing complexity at the local level. 
+
+### How Integrate Works
+
+In summary, Integrate uses 4 Raspberry Pi's to create a plane in which user's network activity can be tracked, then uses user's network activity to determine their location and proximity to their smart devices. Then, once they are close enough, it activates their device, thus meaning that no user interaction is necessary. 
+
+In order to do this, we use a user's existing Wi-Fi network and protocols already used in network operations, as well as our own custom protocol, to facilitate tracking of user devices, smart devices and the Pi's themselves. 
+
+**Here's how:**
+
+First, a user plugs in one of the Raspberry Pi's (in our case, the [Model 3B+](https://datasheets.raspberrypi.com/rpi3/raspberry-pi-3-b-plus-product-brief.pdf)). As soon as the user plugs in the Pi, the OS immediately begins it's startup routine. The code that actually runs Integrate is already installed as a cron job that triggers automatically on system reboot, meaning that the code will begin to run as soon as the operating system is online. 
+
+Integrate was designed from the ground up to be modular and "plug-and-play", meaning that users shouldn't need to know exactly which Pi should be plugged in first in order for the system to work properly. In order to create this modularity, Integrate's Pi's (henceforth referred to as "nodes") are all loaded with the exact same code binaries. Our implementation uses C++ in order to avoid the overhead that Python brings, thus allowing Integrate to run on more resource-constrained devices.  
+
+At startup, the program first creates a log (for easier debugging of the system should anything go wrong) and creates a UDP socket that listens and sends data on a default "pairing port". In order to build the project on more modern protocols, the code utilizes IPv6 by default. 
+
+Then, it sends an LML pairing packet on the network with the default link-local address for IPv6 (for more information on the LML protocol, please look [here](LML_Protocol.md)). After sending out the initial pairing packet, the node immediately places itself in "pairing mode". This means that for a certain amount of time, the node will listen for a response on the same port. Should it receive a response, the node will first verify that the packet is formatted correctly as dictated by the LML protocol. Afterwards, it will check the packet to confirm that the existence of a certain field that is only sent by a "root" node (specifically, the "port_to_communicate" field). If so, the node immediately exits pairing mode and begins it's "leaf" thread. 
+
+Otherwise, if the node does **not** hear from any other node in the predetermined time frame, it assumes the role of the "root" node and begins it's "root" thread.
+
+In order to make the system's operation easier to understand, from here on explanation is split between two sections: the "root" node and the "leaf" node. Each section will explain the operation of a node based on what role it occupies on the network. 
+
+#### Root Node
+
+##### Pairing Phase
+
+Upon starting the "root" thread, the node immediately restarts it's pairing mode, with a few key differences. Firstly, the root will immediately begin listening on the broadcast socket (bound to the pairing port) without sending any data out to the network. This is because leaves are responsible for broadcasting their presence to the root, which means that the root shouldn't need to communicate it's presence on the network for a leaf to tell the parent it exists. 
+
+Upon receiving a pairing packet from a leaf node, the root immediately determines several things:
+1. **Port number** - the root will choose which port number will be used for communication between the root and that specific leaf node. This ensures clear communication between the root and that specific leaf node, so that messages to the root will not be confused with messages from other leaf nodes. 
+2. **Type of Transport Layer Protocol** - the root chooses what transport layer protocol to use based on the amount of noise currently on the network. This allows for flexible communication methods by giving the system the ability to adapt to network conditions and, should the network be mostly interference free, keeps us from the extra overhead that TCP creates. 
+3. **Interval to send data** - the root chooses how often the leaf node communicates distance measurements, thus allowing it to choose an interval that avoids unneccesary network congestion while still communicating data regularly enough to enable the root to make decisions "on the fly". 
+
+These are communicated to the leaf node using the LML protocol, and the parent specifically communicates these to the node using it's IPv6 address (given by the pairing packet that was sent to the root) and the pairing port. An example of this response is below:
+```
+{
+ type: pairing,
+ noise: -73, 
+ port_to_communicate: 27888,
+ interval: 100,
+}
+```
+
+Upon receiving this response, the child will send a confirmation packet over the **pairing port** that is formatted like so: 
+```
+{
+ type: pairing,
+ noise: -64,
+ confirmation: true,
+}
+```
+The confirmation informs the root that data was received successfully and the leaf node is ready to begin communicating using the methods specified by the root. 
+
+Upon receiving confirmation, the root will create a thread which creates the socket used to communicate with that specific leaf nonde. It will also create a shared memory buffer with the thread, allowing for data to be passed back and forth between the threads. This means that location data communicated by the leaf will be accessible by the root, and the root can place data that needs to be communicated to that child in the buffer. 
+
+The root will repeat this pairing process until 3 leaves are paired. Thus, at the end of this stage, the root should have: **4 threads** (one for each of the leaf nodes and one for the root itself), **4 sockets** (one for each leaf node and one left over from the pairing phase), and **3 shared memory buffers** (one for each leaf to communicate data to and receive data from the root).
+
+##### Calibration Phase
+
