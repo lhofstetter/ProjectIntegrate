@@ -26,11 +26,13 @@ First, a user plugs in one of the Raspberry Pi's (in our case, the [Model 3B+](h
 
 Integrate was designed from the ground up to be modular and "plug-and-play", meaning that users shouldn't need to know exactly which Pi should be plugged in first in order for the system to work properly. In order to create this modularity, Integrate's Pi's (henceforth referred to as "nodes") are all loaded with the exact same code binaries. Our implementation uses C++ in order to avoid the overhead that Python brings, thus allowing Integrate to run on more resource-constrained devices.  
 
-At startup, the program first creates a log (for easier debugging of the system should anything go wrong) and creates a UDP socket that listens and sends data on a default "pairing port". In order to build the project on more modern protocols, the code utilizes IPv6 by default. 
+At startup, the program first creates a log (for easier debugging of the system should anything go wrong) and creates a UDP socket that listens and sends data on a default "pairing port". In order to build the project on more modern protocols, the code utilizes IPv6 by default. The code also changes the scheduling policy of the thread handles we create for other functionalities (described later) to SCHED_RR, which allows us to control the priority of the threads that we'll create later. 
 
 Then, it sends an LML pairing packet on the network with the default link-local address for IPv6 (for more information on the LML protocol, please look [here](LML_Protocol.md)). After sending out the initial pairing packet, the node immediately places itself in "pairing mode". This means that for a certain amount of time, the node will listen for a response on the same port. Should it receive a response, the node will first verify that the packet is formatted correctly as dictated by the LML protocol. Afterwards, it will check the packet to confirm that the existence of a certain field that is only sent by a "root" node (specifically, the "port_to_communicate" field). If so, the node immediately exits pairing mode and begins it's "leaf" thread. 
 
-Otherwise, if the node does **not** hear from any other node in the predetermined time frame, it assumes the role of the "root" node and begins it's "root" thread.
+Otherwise, if the node does **not** hear from any other node in the predetermined time frame, it assumes the role of the "root" node and begins it's "root" thread. 
+
+Regardless of which role the node assumes, the thread called after the pairing process (so either the leaf or root thread) is assigned the maximum priority Linux allows for the Round Robin scheduler, which is 99. This allows this thread to deal with the "decision making" and have priority over any threads it creates (as long as their priroity is <= 98, which is the case on our system). 
 
 In order to make the system's operation easier to understand, from here on explanation is split between two sections: the "root" node and the "leaf" node. Each section will explain the operation of a node based on what role it occupies on the network. 
 
@@ -51,23 +53,51 @@ These are communicated to the leaf node using the LML protocol, and the parent s
  type: pairing,
  noise: -73, 
  port_to_communicate: 27888,
- interval: 100,
+ interval: 100 
 }
 ```
+<sub>Please note that noise is measured in decibals (dB), and the interval for communication is measured in milliseconds (ms).</sub>
 
 Upon receiving this response, the child will send a confirmation packet over the **pairing port** that is formatted like so: 
 ```
 {
  type: pairing,
  noise: -64,
- confirmation: true,
+ confirmation: true
 }
 ```
-The confirmation informs the root that data was received successfully and the leaf node is ready to begin communicating using the methods specified by the root. 
+The `confirmation` field informs the root that data was received successfully and the leaf node is ready to begin communicating using the methods specified by the root. 
 
 Upon receiving confirmation, the root will create a thread which creates the socket used to communicate with that specific leaf nonde. It will also create a shared memory buffer with the thread, allowing for data to be passed back and forth between the threads. This means that location data communicated by the leaf will be accessible by the root, and the root can place data that needs to be communicated to that child in the buffer. 
 
-The root will repeat this pairing process until 3 leaves are paired. Thus, at the end of this stage, the root should have: **4 threads** (one for each of the leaf nodes and one for the root itself), **4 sockets** (one for each leaf node and one left over from the pairing phase), and **3 shared memory buffers** (one for each leaf to communicate data to and receive data from the root).
+The root will repeat this pairing process until 3 leaves are paired. Thus, at the end of this stage, the root should have: **4 threads** (one for each of the leaf nodes and one for the root itself), **4 sockets** (one for each leaf node and one left over from the pairing phase), and **3 shared memory buffers** (one for each leaf to communicate data to and receive data from the root). Each of these threads is assigned an equal priority n where n <= 98 and set to the SCHED_RR scheduling algorithm, so that the root thread always runs before them and can send data to the children, or receive data from the children that was placed in their respective memory buffers during their last run.[^1]
 
-##### Calibration Phase
+##### Calibration Phase {#calibrate}
 
+After pairing with the root, the distance of each leaf from each other must be determined in order to properly perform triangulation and accurately determine the location of both user and smart devices. However, pushing this responsibility onto the leaf nodes introduces both unnecessary levels of complexity and would likely result in more congestion on the network. Because of this, we choose to have the root node utilize the already existing communication channels that were established during the pairing process to coordinate each node and have all nodes receive the data needed. 
+
+Upon entering this phase, the root will first send out a calibration packet as specified by the LML protocol. This packet is sent over the pairing socket (ensuring that every child is able to see it) and contains both the amount of packets to send over the pairing socket and the IPv6 address of the leaf node we want to communicate first. **Important note:** while the packet contains the IPv6 address of the leaf node, the packet is addressed to every node. This means that the packet uses the link-local address of IPv6 (ff02:1) and the pairing port to ensure every node receives the message and knows who is going to send their location data first.
+
+```
+{
+    type: calibration, 
+    num_of_calibration_packets: 100,
+    leaf: fe80::603e:5fff:fe62:1556
+}
+```
+<sub>An example of a LML calibrate packet from a root node to a leaf node.</sub>
+
+Upon receiving the calibration packet, a leaf node waits for a total of 10 seconds before sending out response calibration packets. This allows it's "siblings" to save the IPv6 address of that node into their local database, and prepare to measure the distance between them and their sibling. 
+
+After the 10 seconds expires, the leaf node sends out *x* calibration packets, where *x* is the number that was given by the root node. These packets are sent every *n* milliseconds, as specified during the pairing phase. These packets are addressed to the link-local address of IPv6 and pairing port, and contain very simple information so as to avoid constructing and deconstructing a complicated packet at each node:
+```
+{
+    type: calibration,
+    noise: -93,
+    packets_remaining: 87,
+}
+```
+<sub>An example of a calibration packet sent from a leaf node to a root. Note the `packets_remaining` field, which tells us how many calibration packets the leaf has yet to send. </sub>
+
+
+[^1]: Documentation for the functions used to control CPU scheduling can be found [here](https://man7.org/linux/man-pages/man7/sched.7.html).
