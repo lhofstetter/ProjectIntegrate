@@ -2,11 +2,11 @@
 #include <pcap.h>
 #include <pthread.h>
 #include <arpa/inet.h>
-#include <string>
+#include <string.h>
 
 void getDeviceID(pcap_if_t **all_devs, pcap_if_t **node_curr, char error_buff[], char **devID, bool debug);
 void my_callback(u_char *user,const struct pcap_pkthdr* header,const u_char* bytes);
-void *comms(void *args);
+
 /* Struct for packet capture */
 struct sniffer{
     pcap_t *dev_handler;    /* Handler for reading pkt data */
@@ -21,18 +21,6 @@ struct deviceInfo{
     char *dev_ID;       /* Name of device */
     char error_buffer[PCAP_ERRBUF_SIZE]; /* Error buffer */
 }devRecog;
-
-
-// Define a structure for the radiotap header
-struct ieee80211_radiotap_header {
-    u_int8_t it_version;     // set to 0
-    u_int8_t it_pad;
-    u_int16_t it_len;        // entire length
-    u_int32_t it_present;    // fields present
-    // Note: actual radiotap data follows
-};
-
-
 
 /* Main Function */
 int main()
@@ -66,31 +54,7 @@ int main()
         exit(1);
     }
     
-    /* Threads for socket communication */
-    //pthread_t communicator;
-    //pthread_create(&communicator,NULL,analyzer, &sniffArgs.packet_header);
-
     pcap_loop(sniffArgs.dev_handler,30,my_callback,NULL);
-
-    /*
-    Once a packet is received, search for the OSI, 
-    if the OSI is APPLE or SAMSUNG or GOOGLE
-        then grab the MAC address and IP address of this packet and store 
-        these value somewhere.
-    
-
-        Using the IP addresses from the list.  Listen to packets
-        if you found a packet with that MAC address
-            get it, seearch for the signal strength value and
-            send this value back to the parent node
-
-        Do not need to implement socket logic.
-
-   */
-  
-
-    /* Close Packet Handler */
-    // pthread_join(communicator, NULL);
 
     pcap_close(sniffArgs.dev_handler);
     return 0;
@@ -125,39 +89,39 @@ void getDeviceID(pcap_if_t **all_devs, pcap_if_t **node_curr, char error_buff[],
 }
 
 void my_callback(u_char *user,const struct pcap_pkthdr* header,const u_char* bytes){
-    int8_t v = (int8_t)bytes[14];
-    printf("RSSI: %d \n",v);
-    //printf("OUI: %02x %02x %02x ",bytes[109],bytes[110],bytes[111]);
+    int8_t rssi = (int8_t)bytes[14];
+    printf("RSSI: %d \n",rssi);
 
+    /* Get length of Radiotap header */
     uint16_t radiotap_len = bytes[2] + (bytes[3] << 8);
+
+    /* Mac address is typically 10 byte offset from Radiotap header*/
     int mac= radiotap_len + 10;
-    
-    printf("OUI: %02x %02x %02x ",bytes[mac], bytes[mac + 1], bytes[mac + 2]);
+    //std::string oui = bytes[mac] + bytes[mac+1 ] + bytes[mac];
 
-    /* Reread the readiotap and if that can be implemented*/
+    char oui[18];
+    sprintf(oui,"%02x:%02x:%02x:%02x:%02x:%02x", bytes[mac], bytes[mac + 1], bytes[mac + 2],bytes[mac+3], bytes[mac + 4], bytes[mac + 5]);
+    printf("OUI 222: %s\n",oui);
+ 
+   /*
+    if(oui does not exist in the database){
+            send the mac address to https://www.macvendorlookup.com/api/v2/{MAC_Address}
+            (this will return a json string of the OUI vendor) 
+            if the OUI is a mobile device
+                add the oui vendor type and mac address to a buffer and monitor the device.
+                if devices rssi has changed in x amount of time
+                    add it to the whitelist table of devices
+                else
+                    add it to the blacklist table of devices
+            else
+                add it to the blacklist table of devices
+    }else{
+        if whitelisted
+            using the rssi perform the distance calculations
+            send the distance calc to the main pi
+    }
+   
+    *This logic may not work with apples private addresses
 
-
-
-// struct ieee802_radiotap_header *rt_header;
-//     int rt_header_len;
-
-//     rt_header = (struct ieee80211_radiotap_header *) bytes;
-//     rt_header_len = rt_header->it_len;
-
-//     printf("Radiotap Header Length: %d\n", rt_header_len);
-
-//     // RSSI is often found after the radiotap header
-//     if (rt_header_len < header->len) {
-//         u_int8_t rssi = bytes[rt_header_len];
-//         printf("RSSI: %d\n", rssi);
-//     } else {
-//         printf("No RSSI information available\n");
-//     }
-    printf("\n");
-   // printf("Test %s\n",bytes);
-  
+   */
 }   
-
-// one thread for sniffer (send data to node routine)
-// one thread hold OSI save devices we want
-// one thread reliest on list from other list () from sniffer
