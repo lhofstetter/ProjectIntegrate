@@ -142,7 +142,9 @@ First, the system will capture a packet that comes over the network. Upon receiv
 
 Assuming that the MAC address is not in our block list, the system then looks for the address in our *candidate list*. Devices in this list belong to one of two categories: **candidate** or **permanent**. Permanent devices represent devices that have been tracked by the system for a period *t* (where *t* >= 24 hours) and have been determined to be indicative of user activity. Should the device be present in our candidate list, the distance of the device from the node is immediately calculated, and that distance data (along with the MAC address) is passed to the socket for communication with the parent. 
 
-If the device is *not* present in the candidate list, then the system looks for one final piece of information: the OUI[^2]. If OUI is not located in the packet, the packet is dropped and the system begins looking for other packets. If it is, the OUI is compared to a list of OUI's which represent the OUI's associated with companies that primarily manufacture user devices. If the OUI matches any of these companies, the device's distance from the leaf is calculated and the address and distance are passed to the socket to be communicated with the root. 
+If the device is *not* present in the candidate list, then the system looks for one final piece of information: the OUI[^2]. If OUI is not located in the packet, the packet is dropped and the system begins looking for other packets. If it is, the OUI is compared to a list of OUI's which represent the OUI's associated with companies that primarily manufacture user devices. If the OUI matches any of these companies, the device's distance from the leaf is calculated and the address and distance are passed to the socket to be communicated with the root; this also adds the device to our candidate list. 
+
+[Continue](./System_Overview_cont.md)
 
 
 [^1]: Documentation for the functions used to control CPU scheduling can be found [here](https://man7.org/linux/man-pages/man7/sched.7.html).
