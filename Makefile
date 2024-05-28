@@ -12,11 +12,14 @@ all : RSSI NodeRoutine
 RSSI: RSSI.o
 	$(CC) $^ -o $@ $(LDFLAGS)
 
-NodeRoutine: NodeRoutine.o 
+NodeRoutine: NodeRoutine.o lml.o
 	$(CC) $^ -o $@ $(LDFLAGS)
 	
 RSSI.o: RSSI.cpp
 NodeRoutine.o: NodeRoutine.cpp
+
+LML.o: lml.cpp lml.h
+	$(CC) $(CFLAGS) -c lml.cpp -o LML.o
 
 clean:
 	rm -f *.o RSSI NodeRoutine
