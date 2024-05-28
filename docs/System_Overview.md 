@@ -28,7 +28,7 @@ Integrate was designed from the ground up to be modular and "plug-and-play", mea
 
 At startup, the program first creates a log (for easier debugging of the system should anything go wrong) and creates a UDP socket that listens and sends data on a default "pairing port". In order to build the project on more modern protocols, the code utilizes IPv6 by default. The code also changes the scheduling policy of the thread handles we create for other functionalities (described later) to SCHED_RR, which allows us to control the priority of the threads that we'll create later. 
 
-Then, it sends an LML pairing packet on the network with the default link-local address for IPv6 (for more information on the LML protocol, please look [here](LML_Protocol.md)). After sending out the initial pairing packet, the node immediately places itself in "pairing mode". This means that for a certain amount of time, the node will listen for a response on the same port. Should it receive a response, the node will first verify that the packet is formatted correctly as dictated by the LML protocol. Afterwards, it will check the packet to confirm that the existence of a certain field that is only sent by a "root" node (specifically, the "port_to_communicate" field). If so, the node immediately exits pairing mode and begins it's "leaf" thread. 
+Then, it sends an LML pairing packet on the network with the default link-local address for IPv6 (for more information on the LML protocol, please look [here](LML_Protocol.md)). After sending out the initial pairing packet, the node immediately places itself in "pairing mode". This means that for a certain amount of time, the node will listen for a response on the same port. Should it receive a response, the node will first verify that the packet is formatted correctly as dictated by the LML protocol. Afterwards, it will check the packet to confirm that the existence of a certain field that is only sent by a "root" node (specifically, the `port_to_communicate` field). If so, the node immediately exits pairing mode and begins it's "leaf" thread. 
 
 Otherwise, if the node does **not** hear from any other node in the predetermined time frame, it assumes the role of the "root" node and begins it's "root" thread. 
 
@@ -72,6 +72,14 @@ Upon receiving confirmation, the root will create a thread which creates the soc
 
 The root will repeat this pairing process until 3 leaves are paired. Thus, at the end of this stage, the root should have: **4 threads** (one for each of the leaf nodes and one for the root itself), **4 sockets** (one for each leaf node and one left over from the pairing phase), and **3 shared memory buffers** (one for each leaf to communicate data to and receive data from the root). Each of these threads is assigned an equal priority n where n <= 98 and set to the SCHED_RR scheduling algorithm, so that the root thread always runs before them and can send data to the children, or receive data from the children that was placed in their respective memory buffers during their last run.[^1]
 
+##### Sniffer Establishment
+
+In order to proceed with tracking devices using the signal strength, we must be able to quantifiably measure the RSSI. However, there isn't a reliable way to do this using sockets. In order to properly measure this, we choose to utilize the Radiotap header that is added when capturing packets in monitor mode. 
+
+However, we can't sacrifice communication between the root and the leaf nodes, and placing a NIC in monitor mode causes the NIC to diassociate from the network. In order to maintain connections between the nodes, we have purchased three antennas with their own NIC's, each capable of monitor mode. Each antenna will be connected to a Raspberry Pi "leaf", which gives each Pi **two** NIC's instead of the standard one. This allows us to place one NIC in monitor mode (which allows us to continually monitor the network and capture all packets being transmitted near the Pi) and reserve the other NIC for communication between itself and the other leaves. 
+
+For more details on how these capture sessions are created and facilitated, click [here](). 
+
 ##### Calibration Phase {#calibrate}
 
 After pairing with the root, the distance of each leaf from each other must be determined in order to properly perform triangulation and accurately determine the location of both user and smart devices. However, pushing this responsibility onto the leaf nodes introduces both unnecessary levels of complexity and would likely result in more congestion on the network. Because of this, we choose to have the root node utilize the already existing communication channels that were established during the pairing process to coordinate each node and have all nodes receive the data needed. 
@@ -99,5 +107,29 @@ After the 10 seconds expires, the leaf node sends out *x* calibration packets, w
 ```
 <sub>An example of a calibration packet sent from a leaf node to a root. Note the `packets_remaining` field, which tells us how many calibration packets the leaf has yet to send. </sub>
 
+Because of the address and port used to address these packets, they will be seen by the other leaves. However, instead of having these leafs receive these messages on their IPv6 socket that is listening on the pairing port, the leaves use the capture handles they have opened through the [pcap library](https://www.tcpdump.org/manpages/pcap.3pcap.html) to "sniff" the packets as they are sent from their siblings. As these packets are intercepted, the Radiotap header added on the packet when received is dissected and the RSSI (or signal strength) is extracted from the packet. However, because of the ever-changing landscape that is network conditions, the leaf will not inform the root that it has successfully received the RSSI from it's sibling until the number of remaining packets is 0. This allows us to average the RSSI values, so as to use a more accurate distance between the leaf and it's siblings. 
+
+Once the `packets_remaining` field has dropped to 0, the sibling will then send a confirmation to the root indicating that it has successfully received the distance. Should a sibling not have successfully received any of the packets, it will set the confirmation to false so that the root can ask the leaf that was sending out the packets to resend it's data. An example of a leaf indicating successful estimation of the distance betweeen itself and it's sibling is below:
+
+```
+{
+    type: calibration,
+    noise: -87,
+    leaf:  fe80::603e:5fff:fe62:1556, 
+    confirmation: true
+}
+
+```
+<sub>An example of a confirmation calibration packet sent from a leaf node to a root. Note the `leaf` field, which has the IPv6 address of the sibling the leaf was listening for, **not** the IPv6 address of the leaf sending the confirmation packet.</sub>
+
+This process repeats for each leaf until each leaf has an accurate distance between it and it's siblings. This data is then passed along to the root, which allows the root to have proper measurememts for the device location phase. 
+
+- [ ] : Add packet for sending distances here
+
+##### Smart Device Discovery Phase
+
+- This may need to be skipped/hardcoded at first
+
+##### User Tracking and Automation Phase
 
 [^1]: Documentation for the functions used to control CPU scheduling can be found [here](https://man7.org/linux/man-pages/man7/sched.7.html).
