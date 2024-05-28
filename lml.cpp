@@ -1,4 +1,3 @@
-// g++ -DLML_TEST -std=c++17 -Wall -Wextra lml.cpp -o lml_test
 #include "lml.h"
 
 // Logging error messages to both standard error and a log file.
@@ -119,15 +118,19 @@ namespace LML
 
 #ifdef LML_TEST
 // FOR STANDALONE TESTING SO FAR:
+// g++ -DLML_TEST -std=c++17 -Wall -Wextra lml.cpp -o lml_test
 int main()
 {
+    // Define packet data to simulate a typical input.
     std::map<std::string, std::string> packetData = {
         {"type", "calibration"},
         {"data", "100"}};
 
+    // Create a packet based on the predefined data.
     std::string packet = LML::createPacket(packetData);
     std::cout << "Created Packet: " << packet << std::endl;
 
+    // Parse the created packet back into a map.
     auto parsedPacket = LML::parsePacket(packet);
     std::cout << "Parsed Packet: ";
     for (const auto &p : parsedPacket)
@@ -136,8 +139,11 @@ int main()
     }
     std::cout << std::endl;
 
-    LML::handlePacket(parsedPacket);
+    // Handle the parsed packet and observe the response.
+    int result = LML::handlePacket(parsedPacket);
+    std::cout << "Handle Packet Result: " << result << std::endl;
 
     return 0;
 }
+
 #endif
