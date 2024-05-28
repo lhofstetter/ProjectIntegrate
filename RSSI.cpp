@@ -97,11 +97,10 @@ void my_callback(u_char *user,const struct pcap_pkthdr* header,const u_char* byt
 
     /* Mac address is typically 10 byte offset from Radiotap header*/
     int mac= radiotap_len + 10;
-    //std::string oui = bytes[mac] + bytes[mac+1 ] + bytes[mac];
 
     char oui[18];
     sprintf(oui,"%02x:%02x:%02x:%02x:%02x:%02x", bytes[mac], bytes[mac + 1], bytes[mac + 2],bytes[mac+3], bytes[mac + 4], bytes[mac + 5]);
-    printf("OUI 222: %s\n",oui);
+    printf("OUI: %s\n",oui);
  
    /*
     if(oui does not exist in the database){
