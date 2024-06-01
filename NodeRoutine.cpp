@@ -1,11 +1,19 @@
 #include "NodeDefinitions.h"
+#define MAX_LEAVES 3
 
 using namespace std;
 using namespace cpr;
 
 const string LML_Types[] = {"type", "noise", "candidate", "signal_data", "device", "action", "configure", "port", "protocol", "name_of_device", "devices", "socket_to_communicate", "type_of_socket_used_for_communication", "interval"};
 
-static int pairing_count = 0;
+struct LeafDetails
+{
+    int port;
+    string ipAddress;
+    int identifierNumber;
+};
+
+map<string, LeafDetails> leaf_details;
 
 void logError(const std::string &message)
 {
@@ -82,6 +90,7 @@ namespace LML
         return data;
     }
 
+    // NEED TO IMPLEMENT FUNCTIONS
     int handlePacket(const std::map<std::string, std::string> &packet)
     {
         auto it = packet.find("type");
@@ -277,6 +286,7 @@ void govee_api(const std::string &api_key = "", const std::string &device_id = "
     std::cout << "Response body: " << r.text << std::endl;
 }
 
+// Shortcut fucction to determine best protocol if needed
 void comms(const string &message, const string &ip, int port, int noise_level)
 {
     if (noise_level < -80)
@@ -290,82 +300,163 @@ void comms(const string &message, const string &ip, int port, int noise_level)
         send_tcp_packet(message, ip, port);
     }
 }
-
+// After pairing, parent needs to listen to children
+// ToDo: Implement sockets setup for communication with children
+// ToDo: Implement logic for distance measurements from children
+// Triangulation logic to determine relative positions
+// Calculate distances between the user and devices
+// Decide action based on threshold values
+// API calls to control devices based on proximity
+// Logic to turn off devices when user exits the threshold area
 void *root_node(void * /*arg*/)
 {
     cout << "Hi I'm Root!" << endl;
-    while (true)
+    map<string, LeafDetails> leaf_details;
+    int next_available_port = 5000;
+    int paired_leaves = 0;
+
+    int sock = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
+    sockaddr_in6 address;
+    address.sin6_family = AF_INET6;
+    address.sin6_addr = in6addr_any;
+    address.sin6_port = htons(PAIRING_PORT);
+    bind(sock, (struct sockaddr *)&address, sizeof(address));
+
+    while (paired_leaves < MAX_LEAVES)
     {
-        // ex: govee_api(api_key, device_id, "turn", "on");
-        cout << "Root: Network operations" << endl;
-
-        // implement pairing with children here.
-
-        // begin the calibration process
-        int sock = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
-
-        sockaddr_in6 address;
-        address.sin6_family = AF_INET6;
-        address.sin6_addr = in6addr_any;
-        address.sin6_port = htons(PAIRING_PORT);
-
-        ::bind(sock, (struct sockaddr *)&address, sizeof(address));
-
+        // Broadcast pairing message
         sockaddr_in6 broadcast;
         struct in6_addr broadcast_addr;
         inet_pton(AF_INET6, "ff02::1", &broadcast_addr);
-
         broadcast.sin6_addr = broadcast_addr;
         broadcast.sin6_family = AF_INET6;
         broadcast.sin6_port = htons(PAIRING_PORT);
         const sockaddr *generic_addr = reinterpret_cast<const sockaddr *>(&broadcast);
-        string msg = "{\n type:calibration,\n noise:" + to_string(get_noise_level("wlan0")) + ",\n ";
+        string msg = "{\n\"type\":\"pairing_request\",\n\"noise\":\"" + to_string(get_noise_level("wlan0")) + "\"\n}";
+        sendto(sock, msg.c_str(), msg.size(), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
 
-        static int y;
-        for (y = 0; y < pairing_count; y++)
+        // Listening for children responses
+        char buffer[1024];
+        sockaddr_in6 sender_address;
+        socklen_t sender_address_len = sizeof(sender_address);
+        ssize_t message_len = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&sender_address, &sender_address_len);
+        if (message_len > 0)
         {
-            // need to add the child's mac address we want to send here, then send it and wait for 10 seconds so that they have enough time to receive and send
-            sendto(sock, msg.c_str(), sizeof(msg.c_str()), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
-            sleep(10);
+            buffer[message_len] = '\0';
+            string response(buffer);
+            char ipv6Addr[INET6_ADDRSTRLEN];
+            inet_ntop(AF_INET6, &(sender_address.sin6_addr), ipv6Addr, INET6_ADDRSTRLEN);
+            string ipAddr = ipv6Addr;
 
-            // ip
+            string leaf_identifier = "Leaf#" + to_string(paired_leaves + 1);
+            if (leaf_details.find(leaf_identifier) == leaf_details.end())
+            {
+                LeafDetails details = {next_available_port++, ipAddr, paired_leaves + 1};
+                leaf_details[leaf_identifier] = details;
+                cout << "Paired with new leaf node: " << leaf_identifier
+                     << " on port " << details.port
+                     << " with IP " << details.ipAddress << endl;
+                paired_leaves++;
+            }
         }
-
-        // after pairing, parent needs to listen to children
-
-        // x=soxkets x=#of children to parents = parent has 3 sockets by default plus pairing socket
-        // one for broad cast and 1 for each of the kids
-
-        // children report their distance from the device
-        // parent knows its distance from device too (user device)
-        // kids knows distance from smart bulkb
-
-        // do trianglulation
-
-        // calculate distances betwen those 2
-
-        // decide which (thresh hold value)
-
-        // api calls to turn on or off lights
-
-        // some sory of logic to turn the lights off
-        // if user leaves this threshhold api call off
-
         sleep(10);
     }
+
+    cout << "All leaves paired. Here are their details:" << endl;
+    for (const auto &leaf : leaf_details)
+    {
+        cout << leaf.first << " - IP: " << leaf.second.ipAddress
+             << ", Port: " << leaf.second.port
+             << ", Identifier: " << leaf.second.identifierNumber << endl;
+    }
+
+    // After all leaves are paired, handle ongoing communication or tasks
+    fd_set read_fds;
+    struct timeval tv;
+    int max_fd = sock;
+    while (true)
+    {
+        FD_ZERO(&read_fds);
+        FD_SET(sock, &read_fds);
+        tv = {1, 0}; // Set timeout for select
+
+        int select_result = select(max_fd + 1, &read_fds, NULL, NULL, &tv);
+        if (select_result > 0)
+        {
+            if (FD_ISSET(sock, &read_fds))
+            {
+                // Process received data
+                char buffer[1024];
+                sockaddr_in6 sender_address;
+                socklen_t sender_address_len = sizeof(sender_address);
+                ssize_t message_len = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&sender_address, &sender_address_len);
+                if (message_len > 0)
+                {
+                    buffer[message_len] = '\0';
+                    // Implement logic based on received data
+                    cout << "Received data: " << buffer << endl;
+                }
+            }
+        }
+        // Implement data processing, decision logic, and device control based on sensor data
+
+        sleep(1);
+    }
+
+    close(sock);
     return NULL;
 }
 
 void *leaf_node(void * /*arg*/)
 {
-    cout << "Hi I'm leaf!" << endl;
+    cout << "Waiting for assignment from Root..." << endl;
+
+    int sock = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
+    string root_ip = "root_node_ip"; // Root IP should be known or discoverable
+    int local_port = 5000;           // Default port for initial communication
+    map<string, string> data;        // To store assigned identifier and port
+
+    // Send initial pairing requests until an assignment is received
+    string message = "Pairing request from a new leaf";
+    char buffer[1024];
+    sockaddr_in6 root_address;
+    socklen_t root_address_len = sizeof(root_address);
+    ssize_t message_len;
+
     while (true)
     {
-        int noise_level = get_noise_level("wlan0"); // Change interface
-        cout << "leaf: Noise level: " << noise_level << endl;
-        // comms(message, ip, port, noise_level);
+        send_udp_packet(message, root_ip, local_port);
+
+        message_len = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&root_address, &root_address_len);
+        if (message_len > 0)
+        {
+            buffer[message_len] = '\0';
+            data = parse_json(buffer);
+            if (data.count("identifier") > 0 && data.count("port") > 0)
+            {
+                cout << "Assigned as " << data["identifier"] << " with port " << data["port"] << endl;
+                local_port = stoi(data["port"]); // Update local port with assigned port
+                break;                           // Exit loop after assignment
+            }
+        }
+        sleep(1); // Retry interval
+    }
+
+    // After assignment, continue regular operations
+    while (true)
+    {
+        int noise_level = get_noise_level("wlan0");
+        cout << data["identifier"] << ": Noise level: " << noise_level << endl;
+
+        // Update message with current status
+        message = "Status update from " + data["identifier"] + ", noise level: " + to_string(noise_level);
+        // Use the comms function to determine the best protocol based on noise level
+        comms(message, root_ip, local_port, noise_level);
+
         sleep(10);
     }
+
+    close(sock);
     return NULL;
 }
 
@@ -470,67 +561,6 @@ int main()
         pthread_create(&leaf_thread, NULL, leaf_node, NULL);
     }
 
-    // if we've reached here, there is no other node live on the network that we care about (no root). Start the parent thread.
-
-    /*
-
-    if (node_message[0] == '\0')
-    {
-        logmsg(begin, &alttv, &logfile, "No node found. Assuming current node is Root.", true);
-        char errbuf[PCAP_ERRBUF_SIZE];
-        pcap_if_t *devices;
-
-        if (pcap_findalldevs(&devices, errbuf) == PCAP_ERROR)
-        {
-            logmsg(begin, &alttv, &logfile, "ERROR: findalldevs call failed. Defaulting to " + string(DEFAULT_INTERFACE) + " will result in decreased effectiveness of system, and is currently unsupported. Please reboot the Pi.", true, 2);
-            logfile.close();
-            close(sockfd);
-            exit(1);
-        }
-
-        pcap_if_t *node = devices;
-        while (node != NULL && !(node->flags & PCAP_IF_WIRELESS))
-        {
-            node = node->next;
-        }
-
-        if (node != NULL)
-        {
-            char *interface = node->name;
-            logmsg(begin, &alttv, &logfile, "Interface using wireless adapter found under " + string(interface) + ".", false);
-            pcap_t *device = pcap_create(interface, errbuf);
-            pcap_setnonblock(device, 0, errbuf);
-
-            if (pcap_can_set_rfmon(device) <= 0)
-            {
-                logmsg(begin, &alttv, &logfile, "ERROR: " + string(interface) + " is incapable of monitor mode. Please double check driver install.", true, 2);
-                pcap_freealldevs(devices);
-                logfile.close();
-                close(sockfd);
-                exit(1);
-            }
-            else
-            {
-                if (pcap_set_rfmon(device, 1) != 0)
-                {
-                    logmsg(begin, &alttv, &logfile, "ERROR: Failed to set monitor mode on " + string(interface) + ". Please double check driver install or reboot Pi.", true, 2);
-                    pcap_freealldevs(devices);
-                    logfile.close();
-                    close(sockfd);
-                    exit(1);
-                }
-            }
-        }
-        else
-        {
-            logmsg(begin, &alttv, &logfile, "ERROR: No alternate wireless adapter found. Using " + string(DEFAULT_INTERFACE) + " will result in decreased effectiveness of system, and is currently unsupported. Please plug in the wireless adapter and reboot the Pi.", true, 2);
-            pcap_freealldevs(devices);
-            logfile.close();
-            close(sockfd);
-            exit(1);
-        }
-    } */
-
     logfile.close();
     close(sockfd);
 
@@ -552,6 +582,7 @@ int main()
     std::cout << "Created Packet: " << packet << std::endl;
     auto parsedPacket = LML::parsePacket(packet);
     std::cout << "Parsed Packet: ";
+
     for (const auto &p : parsedPacket)
     {
         std::cout << p.first << " => " << p.second << ", ";

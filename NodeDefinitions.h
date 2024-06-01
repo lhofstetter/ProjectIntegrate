@@ -26,6 +26,7 @@
 #include <pthread.h>
 #include <cpr/cpr.h>
 #include <sys/resource.h>
+#include <sys/select.h>
 
 #define PAIRING_PORT 8082
 #define DEFAULT_WAIT 10.0
@@ -46,7 +47,7 @@ void send_tcp_packet(const std::string &message, const std::string &ip, int port
 std::string exec(const char *cmd);
 int get_noise_level(const std::string &interface);
 void *root_node(void *arg);
-void *sprout_node(void *arg);
+void *leaf_node(void *arg);
 void govee_api(const std::string &api_key, const std::string &device_id, const std::string &action, const std::string &value);
 void comms(const std::string &message, const std::string &ip, int port, int noise_level);
 
