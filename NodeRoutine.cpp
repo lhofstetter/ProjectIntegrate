@@ -7,7 +7,112 @@ const string LML_Types[] = {"type", "noise", "candidate", "signal_data", "device
 
 static int pairing_count = 0;
 
-map<string, string> parse_json(char * node_msg)
+void logError(const std::string &message)
+{
+    std::cerr << "Error: " << message << std::endl;
+    std::ofstream logFile("error.log", std::ios::app);
+    if (logFile.is_open())
+    {
+        logFile << "Error: " << message << std::endl;
+        logFile.close();
+    }
+}
+
+void alertSystem(const std::string &message)
+{
+    std::cerr << "Alert: " << message << std::endl;
+    // More implementation in the future, example SMS text
+}
+
+// LML Functions
+namespace LML
+{
+    std::string createPacket(const std::map<std::string, std::string> &data)
+    {
+        std::stringstream packet;
+        packet << "{";
+        for (const auto &kv : data)
+        {
+            packet << "\"" << kv.first << "\":\"" << kv.second << "\",";
+        }
+        if (!data.empty())
+        {
+            packet.seekp(-1, std::ios_base::end);
+        }
+        packet << "}";
+        return packet.str();
+    }
+
+    std::map<std::string, std::string> parsePacket(const std::string &packet)
+    {
+        std::map<std::string, std::string> data;
+        std::string key, value;
+        bool isKey = true, inQuotes = false;
+        for (char c : packet)
+        {
+            if (c == '{' || c == '}')
+                continue;
+            if (c == '"')
+            {
+                inQuotes = !inQuotes;
+                continue;
+            }
+            if (!inQuotes && c == ':')
+            {
+                isKey = false;
+                continue;
+            }
+            if (!inQuotes && c == ',')
+            {
+                data[key] = value;
+                key = "";
+                value = "";
+                isKey = true;
+                continue;
+            }
+            if (inQuotes)
+            {
+                (isKey ? key : value) += c;
+            }
+        }
+        if (!key.empty() && !value.empty())
+        {
+            data[key] = value;
+        }
+        return data;
+    }
+
+    int handlePacket(const std::map<std::string, std::string> &packet)
+    {
+        auto it = packet.find("type");
+        if (it == packet.end())
+        {
+            logError("Packet received without a type specified.");
+            return -1; // Signal error.
+        }
+        const std::string &type = it->second;
+        if (type == "pairing")
+        {
+            return 0; // Signal success.
+        }
+        else if (type == "calibration")
+        {
+            return 0; // Signal success.
+        }
+        else if (type == "signal_data")
+        {
+            return 0; // Signal success.
+        }
+        else
+        {
+            logError("Unhandled packet type encountered: " + type);
+            alertSystem("Received an unrecognized packet type, which requires manual inspection. Type: " + type);
+            return -1; // Signal error.
+        }
+    }
+}
+
+map<string, string> parse_json(char *node_msg)
 {
     map<string, string> m;
     size_t i;
@@ -189,7 +294,8 @@ void comms(const string &message, const string &ip, int port, int noise_level)
 void *root_node(void * /*arg*/)
 {
     cout << "Hi I'm Root!" << endl;
-    while (true) {
+    while (true)
+    {
         // ex: govee_api(api_key, device_id, "turn", "on");
         cout << "Root: Network operations" << endl;
 
@@ -341,7 +447,8 @@ int main()
         if (recvfrom(sockfd, node_message, sizeof(node_message), 0, (struct sockaddr *)&client_address, &client_struct_size) > 0)
         {
             packet = parse_json(node_message);
-            if (packet.find("port_to_communicate") != packet.end()) {
+            if (packet.find("port_to_communicate") != packet.end())
+            {
                 am_root_node = false;
                 break;
             }
@@ -353,9 +460,12 @@ int main()
         sleep(1000);
     }
 
-    if (am_root_node) {
+    if (am_root_node)
+    {
         pthread_create(&root_thread, NULL, root_node, NULL);
-    } else {
+    }
+    else
+    {
         pthread_create(&leaf_thread, NULL, leaf_node, NULL);
     }
 
@@ -425,3 +535,32 @@ int main()
 
     return 0;
 }
+// Unit testing code for LML
+#ifdef LML_TEST
+int main()
+{
+    // Define packet data to simulate a typical input
+    std::map<std::string, std::string> packetData = {
+        {"type", "calibration"},
+        {"data", "100"}};
+
+    // Create a packet based on the predefined data
+    std::string packet = LML::createPacket(packetData);
+    std::cout << "Created Packet: " << packet << std::endl;
+
+    // Parse the created packet back into a map
+    auto parsedPacket = LML::parsePacket(packet);
+    std::cout << "Parsed Packet: ";
+    for (const auto &p : parsedPacket)
+    {
+        std::cout << p.first << " => " << p.second << ", ";
+    }
+    std::cout << std::endl;
+
+    // Handle the parsed packet and observe the response
+    int result = LML::handlePacket(parsedPacket);
+    std::cout << "Handle Packet Result: " << result << std::endl;
+
+    return 0;
+}
+#endif

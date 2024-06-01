@@ -10,5 +10,11 @@ If distance data is reported by every leaf, the countdown is incremented instead
 
 Furthermore, this gives the system criteria for adding devices to the block list by **refusing to treat devices not on the network as stationary**. In more practical terms, if someone visits your home and then leaves after a few hours, their device shouldn't be blocked after the candidate period of 24 hours expires because the system should still respond to the device if the person visits in the future. However, devices should still be blocked after a period of 24 hours if they are stationary on the network because it will prevent the system from tracking devices that will never move, and thus are not indicitive of user activity. 
 
+trial list:
+-devices on network but not yet synced 
+
+canidate list: 
+-activity in the network
+
 Should the counter not reach the value of *n* within a period of 1 minute, the device will be immediately dropped from the trial list. This indicates that the device did not stay within the system's "perimeter" long enough to be considered a user device, OR that the device is not transmitting data either consistently enough or powerfully enough to be a reliable "user device". 
 
