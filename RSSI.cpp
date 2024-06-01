@@ -104,9 +104,9 @@ void my_callback(u_char *user,const struct pcap_pkthdr* header,const u_char* byt
     /* Mac address is typically 10 byte offset from Radiotap header*/
     int src_mac = radiotap_len + 10;
 
-    char oui[18];
-    sprintf(oui,"%02x:%02x:%02x:%02x:%02x:%02x", bytes[src_mac], bytes[src_mac + 1], bytes[src_mac + 2],bytes[src_mac+3], bytes[src_mac + 4], bytes[src_mac + 5]);
-    printf("OUI: %s\n",oui);
+    char mac_addr[18];
+    sprintf(mac_addr,"%02x:%02x:%02x:%02x:%02x:%02x", bytes[src_mac], bytes[src_mac + 1], bytes[src_mac + 2],bytes[src_mac+3], bytes[src_mac + 4], bytes[src_mac + 5]);
+    printf("MAC: %s\n",mac_addr);
 
     int management = radiotap_len + 24; //
     int temp = management;
