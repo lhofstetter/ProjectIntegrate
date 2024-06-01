@@ -369,6 +369,7 @@ void *leaf_node(void * /*arg*/)
     return NULL;
 }
 
+#ifndef LML_TEST
 int main()
 {
     cout << "-------------------------- Project Integrate --------------------------" << endl;
@@ -535,6 +536,8 @@ int main()
 
     return 0;
 }
+#endif
+
 // Unit testing code for LML
 // g++ -DLML_TEST -std=c++17 -Wall -Wextra NodeRoutine.cpp -o lml_test
 #ifdef LML_TEST
