@@ -54,7 +54,7 @@ int main()
         exit(1);
     }
     
-    pcap_loop(sniffArgs.dev_handler,30,my_callback,NULL);
+    pcap_loop(sniffArgs.dev_handler,50,my_callback,NULL);
 
     pcap_close(sniffArgs.dev_handler);
     return 0;
@@ -89,22 +89,45 @@ void getDeviceID(pcap_if_t **all_devs, pcap_if_t **node_curr, char error_buff[],
 }
 
 void my_callback(u_char *user,const struct pcap_pkthdr* header,const u_char* bytes){
-    int8_t rssi = (int8_t)bytes[14];
-    printf("RSSI: %d \n",rssi);
+    
+    /* Get length of entire packet */
+    bpf_u_int32 packet_length = header->caplen;
 
     /* Get length of Radiotap header */
     uint16_t radiotap_len = bytes[2] + (bytes[3] << 8);
+    
+    /* RSSI is the last element in Radiotap Header*/
+    int8_t rssi = (int8_t)bytes[radiotap_len-1];
+    printf("\n---------------------------------------\n");
+    printf("RSSI: %d \n",rssi);
 
     /* Mac address is typically 10 byte offset from Radiotap header*/
-    int mac= radiotap_len + 10;
+    int src_mac = radiotap_len + 10;
 
     char oui[18];
-    sprintf(oui,"%02x:%02x:%02x:%02x:%02x:%02x", bytes[mac], bytes[mac + 1], bytes[mac + 2],bytes[mac+3], bytes[mac + 4], bytes[mac + 5]);
+    sprintf(oui,"%02x:%02x:%02x:%02x:%02x:%02x", bytes[src_mac], bytes[src_mac + 1], bytes[src_mac + 2],bytes[src_mac+3], bytes[src_mac + 4], bytes[src_mac + 5]);
     printf("OUI: %s\n",oui);
+
+    int management = radiotap_len + 24; //
+    int temp = management;
+    while(temp >= packet_length){
+        if(bytes[temp]==221){
+            printf("Test: %i\n",bytes[temp]);
+            printf("Vendor is: %02x:%02x:%02x\n",bytes[temp+2],bytes[temp+3],bytes[temp+4]);
+            temp = 0;
+            break;
+        }
+        temp++;
+    }
+    if(temp >= packet_length){
+        printf("Vendor ID not found\n");
+    }
+    printf("\n---------------------------------------\n");
  
    /*
     if(oui does not exist in the database){
             send the mac address to https://www.macvendorlookup.com/api/v2/{MAC_Address}
+            try ti sniff the oui type here to avoid api calls
             (this will return a json string of the OUI vendor) 
             if the OUI is a mobile device
                 add the oui vendor type and mac address to a buffer and monitor the device.
@@ -119,6 +142,11 @@ void my_callback(u_char *user,const struct pcap_pkthdr* header,const u_char* byt
             using the rssi perform the distance calculations
             send the distance calc to the main pi
     }
+f
+    write data to shared memory buffer
+    figure out buffer between socket and sniffer
+    reverse ARP for IPv6 
+    store everything in a struct.
    
     *This logic may not work with apples private addresses
 
