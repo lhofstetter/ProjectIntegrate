@@ -539,20 +539,17 @@ int main()
 #endif
 
 // Unit testing code for LML
-// g++ -DLML_TEST -std=c++17 -Wall -Wextra NodeRoutine.cpp -o lml_test
+// g++ -DLML_TEST -std=c++17 -Wall -Wextra NodeRoutine.cpp -o lml_test -lcpr
+// ./lml_test
 #ifdef LML_TEST
 int main()
 {
-    // Define packet data to simulate a typical input
+    // Define packet data to simulate a typical input, customize if needed
     std::map<std::string, std::string> packetData = {
         {"type", "calibration"},
         {"data", "100"}};
-
-    // Create a packet based on the predefined data
     std::string packet = LML::createPacket(packetData);
     std::cout << "Created Packet: " << packet << std::endl;
-
-    // Parse the created packet back into a map
     auto parsedPacket = LML::parsePacket(packet);
     std::cout << "Parsed Packet: ";
     for (const auto &p : parsedPacket)
@@ -560,8 +557,6 @@ int main()
         std::cout << p.first << " => " << p.second << ", ";
     }
     std::cout << std::endl;
-
-    // Handle the parsed packet and observe the response
     int result = LML::handlePacket(parsedPacket);
     std::cout << "Handle Packet Result: " << result << std::endl;
 
