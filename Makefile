@@ -19,4 +19,4 @@ RSSI.o: RSSI.cpp
 NodeRoutine.o: NodeRoutine.cpp
 
 clean:
-	rm -f *.o RSSI NodeRoutine lml_test
+	rm -f *.o RSSI NodeRoutine lml_test log.txt
