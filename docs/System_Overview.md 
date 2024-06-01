@@ -5,14 +5,14 @@ Welcome to Project Integrate. This document is a full system overview of our pro
 ### What Integrate Does
 
 Project Integrate is a smart home automation system that is built to track user activity and make intelligent decisions based on that activity. In other word's, it's designed to turn on smart devices when the user is in close proximity to them, and turn them off when the user is far away from them. While simple in concept, Integrate has a few advantages over proprietary systems that we believe give it a competitive advantage. These include: 
-- **Simple setup and maintanince:**
-    - Integrate is designed to be simple to install and invisible while operating. The entire system is designed to be forgetten and self-maintaining, allowing users to enjoy it's benefits without worrying about keeping it running.
+- **Simple setup and maintenance:**
+    - Integrate is designed to be simple to install and invisible while operating. The entire system is designed to be forgotten and self-maintaining, allowing users to enjoy it's benefits without worrying about keeping it running.
 - **No user interaction necessary:**
     - By default, Integrate will only require users to "register" their smart home devices with the system. Users don't need to register their personal devices with the system, which means that they don't need to know anything about IP/MAC addresses or any information Integrate uses to track their devices. 
 - **Privacy first:**
     - No user data leaves the system or the user's network. This keeps user data local, and thus makes it more difficult for a malicious actor to steal data.
 
-All of these factors and more make Integrate a competitive offering in a market that has become increasingly saturated with "basic" smart home devices which offer no real difference between the smart and "unsmart" version of the products. Our system allows users to stop worrying about leaving devices on or managing automation across multiple platforms, instead allowing users to push the responsiblity of interfacing with the smart devices directly onto our system and reducing complexity at the local level. 
+All of these factors and more make Integrate a competitive offering in a market that has become increasingly saturated with "basic" smart home devices which offer no real difference between the smart and basic version of the products. Our system allows users to stop worrying about leaving devices on or managing automation across multiple platforms, instead allowing users to push the responsibility of interfacing with the smart devices directly onto our system and reducing complexity at the local level. 
 
 ### How Integrate Works
 
@@ -32,7 +32,7 @@ Then, it sends an LML pairing packet on the network with the default link-local 
 
 Otherwise, if the node does **not** hear from any other node in the predetermined time frame, it assumes the role of the "root" node and begins it's "root" thread. 
 
-Regardless of which role the node assumes, the thread called after the pairing process (so either the leaf or root thread) is assigned the maximum priority Linux allows for the Round Robin scheduler, which is 99. This allows this thread to deal with the "decision making" and have priority over any threads it creates (as long as their priroity is <= 98, which is the case on our system). 
+Regardless of which role the node assumes, the thread called after the pairing process (so either the leaf or root thread) is assigned the maximum priority Linux allows for the Round Robin scheduler, which is 99. This allows this thread to deal with the "decision making" and have priority over any threads it creates (as long as their priority is <= 98, which is the case on our system). 
 
 In order to make the system's operation easier to understand, from here on explanation is split between two sections: the "root" node and the "leaf" node. Each section will explain the operation of a node based on what role it occupies on the network. 
 
@@ -45,6 +45,6 @@ Upon starting the "root" thread, the node immediately restarts it's pairing mode
 Upon receiving a pairing packet from a leaf node, the root immediately determines several things:
 1. **Port number** - the root will choose which port number will be used for communication between the root and that specific leaf node. This ensures clear communication between the root and that specific leaf node, so that messages to the root will not be confused with messages from other leaf nodes. 
 2. **Type of Transport Layer Protocol** - the root chooses what transport layer protocol to use based on the amount of noise currently on the network. This allows for flexible communication methods by giving the system the ability to adapt to network conditions and, should the network be mostly interference free, keeps us from the extra overhead that TCP creates. 
-3. **Interval to send data** - the root chooses how often the leaf node communicates distance measurements, thus allowing it to choose an interval that avoids unneccesary network congestion while still communicating data regularly enough to enable the root to make decisions "on the fly". 
+3. **Interval to send data** - the root chooses how often the leaf node communicates distance measurements, thus allowing it to choose an interval that avoids unnecessary network congestion while still communicating data regularly enough to enable the root to make decisions "on the fly". 
 
 [Continue](./System_Overview_2.md)
