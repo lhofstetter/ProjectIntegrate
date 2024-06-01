@@ -536,6 +536,7 @@ int main()
     return 0;
 }
 // Unit testing code for LML
+// g++ -DLML_TEST -std=c++17 -Wall -Wextra NodeRoutine.cpp -o lml_test
 #ifdef LML_TEST
 int main()
 {
