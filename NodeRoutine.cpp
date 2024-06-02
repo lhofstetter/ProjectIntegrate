@@ -390,6 +390,8 @@ void *root_node(void * args)
         string msg = "{\n\"type\":\"calibration\",\n\"noise\":\"" + to_string(get_noise_level("wlan0")) + ",\n\"num_of_calibration_packets\":" + to_string(DEFAULT_CALIBRATION_NUMBER) + ",\n\"leaf\":" + leaf_details["Leaf#" + to_string(i + 1)].ipAddress + "\n}";
         sendto(sock, msg.c_str(), msg.size(), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
         sleep(10); // sleep period while waiting for leaf to begin blasting calibration packets
+        bool leaves[paired_leaves];
+        memset(leaves, false, sizeof(leaves));
         while (true) {
             message_length = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&sender_address, &sender_address_len);
             if (message_length <= 0) {
@@ -398,8 +400,27 @@ void *root_node(void * args)
                 map<string, string> packet = parse_json(buffer);
                 if (packet.find("packets_remaining") != packet.end()) {
                     if (stoi(packet["packets_remaining"]) == 0) {
-                        
+                        // the child has finished it's burst. We should now check to see if the other leaves received successfully. 
+                        while ((message_length = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&sender_address, &sender_address_len)) <= 0) {
+                            continue; // wait until there's something in the socket
+                        }
+
+                        packet = parse_json(buffer);
+                        if (packet.find("confirmation") != packet.end()) {
+                            for (int x = 0; x < paired_leaves; x++) {
+                                for (int y = 0; y < paired_leaves; y++) {
+                                    unsigned char buf[sizeof(struct in6_addr)];
+                                    inet_pton(AF_INET6, leaf_details["Leaf#" + to_string(x + 1)].ipAddress.c_str(), buf);
+                                    if (buf == sender_address.sin6_addr.__u6_addr.__u6_addr8) { // compares the IP address of the stored leaf to the one that just came in. If it matches, mark it and move on. 
+                                        leaves[y] = true;
+                                        break;
+                                    }
+                                }
+                            } // horribly inefficient way to do this, but it should work (I think lol).
+                        }
                     }
+                } else {
+                    continue; // this isn't the last packet. Continue and load the next packet. 
                 }
             }
         }
