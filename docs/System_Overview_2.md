@@ -19,13 +19,13 @@ Upon receiving this response, the child will send a confirmation packet over the
 ```
 The `confirmation` field informs the root that data was received successfully and the leaf node is ready to begin communicating using the methods specified by the root. 
 
-Upon receiving confirmation, the root will create a thread which creates the socket used to communicate with that specific leaf nonde. It will also create a shared memory buffer with the thread, allowing for data to be passed back and forth between the threads. This means that location data communicated by the leaf will be accessible by the root, and the root can place data that needs to be communicated to that child in the buffer. 
+Upon receiving confirmation, the root will create a thread which creates the socket used to communicate with that specific leaf node. It will also create a shared memory buffer with the thread, allowing for data to be passed back and forth between the threads. This means that location data communicated by the leaf will be accessible by the root, and the root can place data that needs to be communicated to that child in the buffer. 
 
 The root will repeat this pairing process until 3 leaves are paired. Thus, at the end of this stage, the root should have: **4 threads** (one for each of the leaf nodes and one for the root itself), **4 sockets** (one for each leaf node and one left over from the pairing phase), and **3 shared memory buffers** (one for each leaf to communicate data to and receive data from the root). Each of these threads is assigned an equal priority n where n <= 98 and set to the SCHED_RR scheduling algorithm, so that the root thread always runs before them and can send data to the children, or receive data from the children that was placed in their respective memory buffers during their last run.[^1]
 
 ##### Sniffer Establishment
 
-In order to proceed with tracking devices using the signal strength, we must be able to quantifiably measure the RSSI. However, there isn't a reliable way to do this using sockets. In order to properly measure this, we choose to utilize the Radiotap header that is added when capturing packets in monitor mode. 
+In order to proceed with tracking devices using the signal strength, we must be able to quantifiable measure the RSSI. However, there isn't a reliable way to do this using sockets. In order to properly measure this, we choose to utilize the Radiotap header that is added when capturing packets in monitor mode. 
 
 However, we can't sacrifice communication between the root and the leaf nodes, and placing a NIC in monitor mode causes the NIC to diassociate from the network. In order to maintain connections between the nodes, we have purchased three antennas with their own NIC's, each capable of monitor mode. Each antenna will be connected to a Raspberry Pi "leaf", which gives each Pi **two** NIC's instead of the standard one. This allows us to place one NIC in monitor mode (which allows us to continually monitor the network and capture all packets being transmitted near the Pi) and reserve the other NIC for communication between itself and the other leaves. 
 
@@ -39,7 +39,8 @@ Upon entering this phase, the root will first send out a calibration packet as s
 #### {#link_to_calibration_packets}
 ```
 {
-    type: calibration, 
+    type: calibration,
+    noise: -64,
     num_of_calibration_packets: 100,
     leaf: fe80::603e:5fff:fe62:1556
 }

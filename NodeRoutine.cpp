@@ -364,7 +364,7 @@ void *root_node(void * args)
             {
                 LeafDetails details = {PAIRING_PORT, ipAddr, paired_leaves + 1};
                 leaf_details[leaf_identifier] = details;
-                logmsg(arguments -> time_begin, &new_alt_tv, arguments -> log_file, "Paired with new leaf node: " + leaf_identifier + " on port " + to_string(details.port) + " with IP " + details.ipAddress, true);
+                logmsg(arguments -> time_begin, &new_alt_tv, arguments -> log_file, "Paired with new leaf node: " + leaf_identifier + " on port " + to_string(details.port) + " with IP " + details.ipAddress + ".", true);
                 paired_leaves++;
             }
         }
@@ -382,8 +382,13 @@ void *root_node(void * args)
     }
 
     // After all leaves are paired, begin calibration process.
+    memset(buffer, '\0', 1024);
 
-    
+    for (int i = 0; i < paired_leaves; i++) {
+        string msg = "{\n\"type\":\"calibration\",\n\"noise\":\"" + to_string(get_noise_level("wlan0")) + ",\n\"num_of_calibration_packets\": 100,\n\"leaf\":" + leaf_details["Leaf#" + to_string(i + 1)].ipAddress + "\n}";
+        sendto(sock, msg.c_str(), msg.size(), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
+        
+    }
 
     /*
     fd_set read_fds;
