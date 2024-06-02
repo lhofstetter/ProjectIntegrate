@@ -2,7 +2,7 @@
 #define MAX_LEAVES 3
 
 using namespace std;
-using namespace cpr;
+//using namespace cpr;
 
 const string LML_Types[] = {"type", "noise", "candidate", "signal_data", "device", "action", "configure", "port", "protocol", "name_of_device", "devices", "socket_to_communicate", "type_of_socket_used_for_communication", "interval"};
 
@@ -12,6 +12,14 @@ struct LeafDetails
     string ipAddress;
     int identifierNumber;
     int socket;
+};
+
+struct RootArgs {
+    int socket_fd;
+    fstream * log_file;
+    double time_begin;
+    timespec tv, alt_tv;
+    char node_message[200];
 };
 
 map<string, LeafDetails> leaf_details;
@@ -275,7 +283,7 @@ void send_tcp_packet(const std::string &message, const std::string &ip, int port
     send(sockfd, message.c_str(), message.size(), 0);
     close(sockfd);
 }
-
+/*
 void govee_api(const std::string &api_key = "", const std::string &device_id = "", const std::string &action = "", const std::string &value = "")
 {
     Url url = "https://developer-api.govee.com/v1/devices/control";
@@ -286,8 +294,8 @@ void govee_api(const std::string &api_key = "", const std::string &device_id = "
     std::cout << "Status code: " << r.status_code << std::endl;
     std::cout << "Response body: " << r.text << std::endl;
 }
-
-// Shortcut fucction to determine best protocol if needed
+*/
+// Shortcut function to determine best protocol if needed
 void comms(const string &message, const string &ip, int port, int noise_level)
 {
     if (noise_level < -80)
@@ -303,25 +311,22 @@ void comms(const string &message, const string &ip, int port, int noise_level)
 }
 // After pairing, parent needs to listen to children
 // ToDo: Implement sockets setup for communication with children
-// ToDo: Implement logic for distance measurements from children
+// @todo: Implement logic for distance measurements from children
 // Triangulation logic to determine relative positions
 // Calculate distances between the user and devices
 // Decide action based on threshold values
 // API calls to control devices based on proximity
 // Logic to turn off devices when user exits the threshold area
-void *root_node(void * /*arg*/)
+void *root_node(void * args)
 {
     cout << "Hi I'm Root!" << endl;
     map<string, LeafDetails> leaf_details;
     int next_available_port = 5000;
     int paired_leaves = 0;
 
-    int sock = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
-    sockaddr_in6 address;
-    address.sin6_family = AF_INET6;
-    address.sin6_addr = in6addr_any;
-    address.sin6_port = htons(PAIRING_PORT);
-    bind(sock, (struct sockaddr *)&address, sizeof(address));
+    struct RootArgs * arguments = (struct RootArgs *) args;
+
+    int sock = arguments -> socket_fd;
 
     while (paired_leaves < MAX_LEAVES)
     {
@@ -422,8 +427,7 @@ void *root_node(void * /*arg*/)
     return NULL;
 }
 
-void *leaf_node(void * /*arg*/)
-{
+void *leaf_node(void * /*arg*/){
     cout << "Waiting for assignment from Root..." << endl;
 
     int sock = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
@@ -479,10 +483,10 @@ void *leaf_node(void * /*arg*/)
 int main()
 {
     cout << "-------------------------- Project Integrate --------------------------" << endl;
+    RootArgs * args = (struct RootArgs *)malloc(sizeof(struct RootArgs));
     fstream logfile;
     struct timespec tv, alttv;
     double begin = epoch_double(&tv);
-
     char node_message[200];
     memset(node_message, '\0', sizeof(node_message));
 
@@ -554,7 +558,7 @@ int main()
         if (recvfrom(sockfd, node_message, sizeof(node_message), 0, (struct sockaddr *)&client_address, &client_struct_size) > 0)
         {
             packet = parse_json(node_message);
-            if (packet.find("port_to_communicate") != packet.end())
+            if (packet.find("interval") != packet.end())
             {
                 am_root_node = false;
                 break;
@@ -564,12 +568,18 @@ int main()
         {
             sendto(sockfd, msg, sizeof(msg), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
         }
-        sleep(1000);
+        sleep(1);
     }
+
+    args -> alt_tv = alttv;
+    args -> tv = tv;
+    args -> time_begin = begin;
+    args -> socket_fd = sockfd;
+    args -> log_file = &logfile;
 
     if (am_root_node)
     {
-        pthread_create(&root_thread, NULL, root_node, NULL);
+        pthread_create(&root_thread, NULL, root_node, args);
     }
     else
     {
