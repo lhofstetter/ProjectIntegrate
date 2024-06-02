@@ -11,6 +11,7 @@ struct LeafDetails
     int port;
     string ipAddress;
     int identifierNumber;
+    int socket;
 };
 
 map<string, LeafDetails> leaf_details;
@@ -373,34 +374,48 @@ void *root_node(void * /*arg*/)
     // After all leaves are paired, handle ongoing communication or tasks
     fd_set read_fds;
     struct timeval tv;
-    int max_fd = sock;
+    int max_fd = sock; // Initially the highest fd is the main socket
+    for (const auto &leaf : leaf_details)
+    {
+        if (leaf.second.socket > max_fd)
+        {
+            max_fd = leaf.second.socket;
+        }
+    }
+
     while (true)
     {
         FD_ZERO(&read_fds);
         FD_SET(sock, &read_fds);
+        for (const auto &leaf : leaf_details)
+        {
+            FD_SET(leaf.second.socket, &read_fds);
+        }
         tv = {1, 0}; // Set timeout for select
 
         int select_result = select(max_fd + 1, &read_fds, NULL, NULL, &tv);
         if (select_result > 0)
         {
-            if (FD_ISSET(sock, &read_fds))
+            for (const auto &leaf : leaf_details)
             {
-                // Process received data
-                char buffer[1024];
-                sockaddr_in6 sender_address;
-                socklen_t sender_address_len = sizeof(sender_address);
-                ssize_t message_len = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&sender_address, &sender_address_len);
-                if (message_len > 0)
+                if (FD_ISSET(leaf.second.socket, &read_fds))
                 {
-                    buffer[message_len] = '\0';
-                    // Implement logic based on received data
-                    cout << "Received data: " << buffer << endl;
+                    // Process data from this specific leaf
+                    char leaf_buffer[1024];
+                    sockaddr_in6 leaf_address;
+                    socklen_t leaf_address_len = sizeof(leaf_address);
+                    ssize_t leaf_message_len = recvfrom(leaf.second.socket, leaf_buffer, sizeof(leaf_buffer), 0, (struct sockaddr *)&leaf_address, &leaf_address_len);
+                    if (leaf_message_len > 0)
+                    {
+                        leaf_buffer[leaf_message_len] = '\0';
+                        // Implement logic based on received data
+                        cout << "Received data from " << leaf.first << ": " << leaf_buffer << endl;
+                        // Further processing logic here
+                    }
                 }
             }
         }
-        // Implement data processing, decision logic, and device control based on sensor data
-
-        sleep(1);
+        sleep(1); // Reduce CPU usage
     }
 
     close(sock);
