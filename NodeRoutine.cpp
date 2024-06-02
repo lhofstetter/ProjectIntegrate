@@ -1,5 +1,6 @@
 #include "NodeDefinitions.h"
 #define MAX_LEAVES 3
+#define DEFAULT_INTERVAL 50
 
 using namespace std;
 //using namespace cpr;
@@ -319,32 +320,36 @@ void comms(const string &message, const string &ip, int port, int noise_level)
 // Logic to turn off devices when user exits the threshold area
 void *root_node(void * args)
 {
-    cout << "Hi I'm Root!" << endl;
     map<string, LeafDetails> leaf_details;
-    int next_available_port = 5000;
     int paired_leaves = 0;
 
     struct RootArgs * arguments = (struct RootArgs *) args;
+    timespec new_tv, new_alt_tv;
+    new_tv = arguments -> tv;
+    new_alt_tv = arguments -> alt_tv;
+    logmsg(arguments -> time_begin, &new_alt_tv, arguments -> log_file, "Root status confirmed. Entering pairing phase.", true);
+
 
     int sock = arguments -> socket_fd;
+     // Broadcast pairing message
+    sockaddr_in6 broadcast;
+    struct in6_addr broadcast_addr;
+    inet_pton(AF_INET6, "ff02::1", &broadcast_addr);
+    broadcast.sin6_addr = broadcast_addr;
+    broadcast.sin6_family = AF_INET6;
+    broadcast.sin6_port = htons(PAIRING_PORT);
+    const sockaddr *generic_addr = reinterpret_cast<const sockaddr *>(&broadcast);
+    sockaddr_in6 sender_address;
+    socklen_t sender_address_len = sizeof(sender_address);
+    char buffer[1024];
 
-    while (paired_leaves < MAX_LEAVES)
-    {
-        // Broadcast pairing message
-        sockaddr_in6 broadcast;
-        struct in6_addr broadcast_addr;
-        inet_pton(AF_INET6, "ff02::1", &broadcast_addr);
-        broadcast.sin6_addr = broadcast_addr;
-        broadcast.sin6_family = AF_INET6;
-        broadcast.sin6_port = htons(PAIRING_PORT);
-        const sockaddr *generic_addr = reinterpret_cast<const sockaddr *>(&broadcast);
-        string msg = "{\n\"type\":\"pairing_request\",\n\"noise\":\"" + to_string(get_noise_level("wlan0")) + "\"\n}";
+    while (paired_leaves < MAX_LEAVES) {
+        memset(buffer, '\0', 1024);
+        string msg = "{\n\"type\":\"pairing\",\n\"noise\":\"" + to_string(get_noise_level("wlan0")) + "\",\n\"interval\":" + to_string(DEFAULT_INTERVAL + (DEFAULT_INTERVAL * paired_leaves)) + "\n}";
         sendto(sock, msg.c_str(), msg.size(), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
-
+        // recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&sender_address, &sender_address_len); 
         // Listening for children responses
-        char buffer[1024];
-        sockaddr_in6 sender_address;
-        socklen_t sender_address_len = sizeof(sender_address);
+        
         ssize_t message_len = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&sender_address, &sender_address_len);
         if (message_len > 0)
         {
@@ -357,18 +362,18 @@ void *root_node(void * args)
             string leaf_identifier = "Leaf#" + to_string(paired_leaves + 1);
             if (leaf_details.find(leaf_identifier) == leaf_details.end())
             {
-                LeafDetails details = {next_available_port++, ipAddr, paired_leaves + 1};
+                LeafDetails details = {PAIRING_PORT, ipAddr, paired_leaves + 1};
                 leaf_details[leaf_identifier] = details;
-                cout << "Paired with new leaf node: " << leaf_identifier
-                     << " on port " << details.port
-                     << " with IP " << details.ipAddress << endl;
+                logmsg(arguments -> time_begin, &new_alt_tv, arguments -> log_file, "Paired with new leaf node: " + leaf_identifier + " on port " + to_string(details.port) + " with IP " + details.ipAddress, true);
                 paired_leaves++;
             }
         }
-        sleep(10);
+        sleep(5);
     }
+    
+    logmsg(arguments -> time_begin, &new_alt_tv, arguments -> log_file, "All leaves paired.", true);
 
-    cout << "All leaves paired. Here are their details:" << endl;
+    cout << "All leaves paired. Connection details:" << endl;
     for (const auto &leaf : leaf_details)
     {
         cout << leaf.first << " - IP: " << leaf.second.ipAddress
@@ -376,7 +381,11 @@ void *root_node(void * args)
              << ", Identifier: " << leaf.second.identifierNumber << endl;
     }
 
-    // After all leaves are paired, handle ongoing communication or tasks
+    // After all leaves are paired, begin calibration process.
+
+    
+
+    /*
     fd_set read_fds;
     struct timeval tv;
     int max_fd = sock; // Initially the highest fd is the main socket
@@ -422,6 +431,7 @@ void *root_node(void * args)
         }
         sleep(1); // Reduce CPU usage
     }
+    */
 
     close(sock);
     return NULL;
@@ -577,13 +587,21 @@ int main()
     args -> socket_fd = sockfd;
     args -> log_file = &logfile;
 
+
     if (am_root_node)
     {
+        recvfrom(sockfd, node_message, sizeof(node_message), 0, (struct sockaddr *)&client_address, &client_struct_size);
         pthread_create(&root_thread, NULL, root_node, args);
+        while (true) {
+
+        }
     }
     else
     {
         pthread_create(&leaf_thread, NULL, leaf_node, NULL);
+        while (true) {
+            
+        }
     }
 
     logfile.close();
