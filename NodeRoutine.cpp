@@ -13,6 +13,7 @@ struct LeafDetails
     string ipAddress;
     int identifierNumber;
     int socket;
+    int interval;
 };
 
 struct RootArgs {
@@ -353,7 +354,7 @@ void *root_node(void * args)
         ssize_t message_len = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&sender_address, &sender_address_len);
         if (message_len > 0)
         {
-            buffer[message_len] = '\0';
+            buffer[message_len] = '\0'; // @attention: @Marley why are we getting rid of the last byte?
             string response(buffer);
             char ipv6Addr[INET6_ADDRSTRLEN];
             inet_ntop(AF_INET6, &(sender_address.sin6_addr), ipv6Addr, INET6_ADDRSTRLEN);
@@ -362,7 +363,7 @@ void *root_node(void * args)
             string leaf_identifier = "Leaf#" + to_string(paired_leaves + 1);
             if (leaf_details.find(leaf_identifier) == leaf_details.end())
             {
-                LeafDetails details = {PAIRING_PORT, ipAddr, paired_leaves + 1};
+                LeafDetails details = {PAIRING_PORT, ipAddr, paired_leaves + 1, DEFAULT_INTERVAL + (DEFAULT_INTERVAL * paired_leaves)};
                 leaf_details[leaf_identifier] = details;
                 logmsg(arguments -> time_begin, &new_alt_tv, arguments -> log_file, "Paired with new leaf node: " + leaf_identifier + " on port " + to_string(details.port) + " with IP " + details.ipAddress + ".", true);
                 paired_leaves++;
@@ -383,11 +384,26 @@ void *root_node(void * args)
 
     // After all leaves are paired, begin calibration process.
     memset(buffer, '\0', 1024);
+    ssize_t message_length;
 
     for (int i = 0; i < paired_leaves; i++) {
-        string msg = "{\n\"type\":\"calibration\",\n\"noise\":\"" + to_string(get_noise_level("wlan0")) + ",\n\"num_of_calibration_packets\": 100,\n\"leaf\":" + leaf_details["Leaf#" + to_string(i + 1)].ipAddress + "\n}";
+        string msg = "{\n\"type\":\"calibration\",\n\"noise\":\"" + to_string(get_noise_level("wlan0")) + ",\n\"num_of_calibration_packets\":" + to_string(DEFAULT_CALIBRATION_NUMBER) + ",\n\"leaf\":" + leaf_details["Leaf#" + to_string(i + 1)].ipAddress + "\n}";
         sendto(sock, msg.c_str(), msg.size(), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
-        
+        sleep(10); // sleep period while waiting for leaf to begin blasting calibration packets
+        while (true) {
+            message_length = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&sender_address, &sender_address_len);
+            if (message_length <= 0) {
+                continue;
+            } else {
+                map<string, string> packet = parse_json(buffer);
+                if (packet.find("packets_remaining") != packet.end()) {
+                    if (stoi(packet["packets_remaining"]) == 0) {
+                        
+                    }
+                }
+            }
+        }
+
     }
 
     /*
