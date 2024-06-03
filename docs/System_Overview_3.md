@@ -17,12 +17,12 @@ Once the `packets_remaining` field has dropped to 0, the sibling will then send 
 {
     type: calibration,
     noise: -87,
-    leaf:  fe80::603e:5fff:fe62:1556, 
-    confirmation: true
+    leaf:  fe80::603e:5fff:fe62:1556,
+    distance: 4.6,
 }
 
 ```
-<sub>An example of a confirmation calibration packet sent from a leaf node to a root. Note the `leaf` field, which has the IPv6 address of the sibling the leaf was listening for, **not** the IPv6 address of the leaf sending the confirmation packet.</sub>
+<sub>An example of a confirmation calibration packet sent from a leaf node to a root. Note the `leaf` field, which has the IPv6 address of the sibling the leaf was listening for, **not** the IPv6 address of the leaf sending the confirmation packet. The distance field indicates the leaves distance measure between itself and it's sibling (measurement given in meters). </sub>
 
 After receiving a confirmation from each of the leaves, the root then sends out a new calibration packet, just like [before](#link_to_calibration_packets), except with a different IPv6 address, which indicates a different leaf that needs to send data so it's siblings can register it's location. This process repeats for each leaf until each leaf has an accurate distance between it and it's siblings. This data is then passed along to the root at **the end of the calibration phase**, which allows the root to have proper measurements for the device location phase. 
 

@@ -7,13 +7,13 @@ using namespace std;
 
 const string LML_Types[] = {"type", "noise", "candidate", "signal_data", "device", "action", "configure", "port", "protocol", "name_of_device", "devices", "socket_to_communicate", "type_of_socket_used_for_communication", "interval"};
 
-struct LeafDetails
-{
+struct LeafDetails{
     int port;
     string ipAddress;
     int identifierNumber;
     int socket;
     int interval;
+    map<string, int> distanceFromSiblings;
 };
 
 struct RootArgs {
@@ -312,7 +312,7 @@ void comms(const string &message, const string &ip, int port, int noise_level)
     }
 }
 // After pairing, parent needs to listen to children
-// ToDo: Implement sockets setup for communication with children
+// @todo: Implement sockets setup for communication with children
 // @todo: Implement logic for distance measurements from children
 // Triangulation logic to determine relative positions
 // Calculate distances between the user and devices
@@ -392,10 +392,11 @@ void *root_node(void * args)
         sleep(10); // sleep period while waiting for leaf to begin blasting calibration packets
         bool leaves[paired_leaves - 1];
         memset(leaves, false, sizeof(leaves));
-        while (true) {
+        bool cond = true;
+        while (cond) {
             message_length = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&sender_address, &sender_address_len);
             if (message_length <= 0) {
-                continue;
+                continue; // no message in the buffer or empty message
             } else {
                 map<string, string> packet = parse_json(buffer);
                 if (packet.find("packets_remaining") != packet.end()) {
@@ -406,72 +407,42 @@ void *root_node(void * args)
                         }
 
                         packet = parse_json(buffer);
-                        if (packet.find("confirmation") != packet.end()) {
+                        if (packet.find("distance") != packet.end()) {
                             for (int x = 0; x < paired_leaves - 1; x++) {
                                     unsigned char buf[sizeof(struct in6_addr)];
                                     inet_pton(AF_INET6, leaf_details["Leaf#" + to_string(x + 1)].ipAddress.c_str(), buf);
-                                    if (buf == sender_address.sin6_addr.__u6_addr.__u6_addr8) { // compares the IP address of the stored leaf to the one that just came in. If it matches, mark it and move on. 
+                                    if (buf == sender_address.sin6_addr.__u6_addr.__u6_addr8) { // compares the IP address of the stored leaf to the one that just came in. If it matches, store the distance estimate with it's sibling and move on. 
                                         leaves[x] = true;
+                                        leaf_details["Leaf#" + to_string(x + 1)].distanceFromSiblings.insert({packet["leaf"], stoi(packet["distance"])});                        
                                         break;
                                     }
                             } // horribly inefficient way to do this, but it should work (I think lol).
+                            for (int x = 0; x < paired_leaves - 1; x++) {
+                                if (leaves[x]) {
+                                    if (x == paired_leaves - 2) {
+                                        cond = true;
+                                    }
+                                } else {
+                                    break; // if one leaf isn't marked true, then it doesn't matter what the others are because it won't
+                                    // change the fact that we still need to be listening for other confirmation number. So keep listening. 
+                                }
+                            }
                         }
+                    } else {
+                        continue; // this isn't the last packet. Continue and load the next packet. 
                     }
                 } else {
-                    continue; // this isn't the last packet. Continue and load the next packet. 
+                    continue; // we don't know what packet this is, but it's not one we care about. Move on. 
                 }
             }
         }
-
     }
 
-    /*
-    fd_set read_fds;
-    struct timeval tv;
-    int max_fd = sock; // Initially the highest fd is the main socket
-    for (const auto &leaf : leaf_details)
-    {
-        if (leaf.second.socket > max_fd)
-        {
-            max_fd = leaf.second.socket;
-        }
-    }
+    // calibration phase complete. The root now stores details for every sibling's distance from it's other siblings. We can actually
+    // start doing our job now :D
 
-    while (true)
-    {
-        FD_ZERO(&read_fds);
-        FD_SET(sock, &read_fds);
-        for (const auto &leaf : leaf_details)
-        {
-            FD_SET(leaf.second.socket, &read_fds);
-        }
-        tv = {1, 0}; // Set timeout for select
+    
 
-        int select_result = select(max_fd + 1, &read_fds, NULL, NULL, &tv);
-        if (select_result > 0)
-        {
-            for (const auto &leaf : leaf_details)
-            {
-                if (FD_ISSET(leaf.second.socket, &read_fds))
-                {
-                    // Process data from this specific leaf
-                    char leaf_buffer[1024];
-                    sockaddr_in6 leaf_address;
-                    socklen_t leaf_address_len = sizeof(leaf_address);
-                    ssize_t leaf_message_len = recvfrom(leaf.second.socket, leaf_buffer, sizeof(leaf_buffer), 0, (struct sockaddr *)&leaf_address, &leaf_address_len);
-                    if (leaf_message_len > 0)
-                    {
-                        leaf_buffer[leaf_message_len] = '\0';
-                        // Implement logic based on received data
-                        cout << "Received data from " << leaf.first << ": " << leaf_buffer << endl;
-                        // Further processing logic here
-                    }
-                }
-            }
-        }
-        sleep(1); // Reduce CPU usage
-    }
-    */
 
     close(sock);
     return NULL;
