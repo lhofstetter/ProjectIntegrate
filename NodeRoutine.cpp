@@ -26,6 +26,10 @@ struct RootArgs {
 
 map<string, LeafDetails> leaf_details;
 
+sched_param p = {sched_get_priority_max(SCHED_RR)};
+const sched_param * priority = &p;
+
+
 void logError(const std::string &message)
 {
     std::cerr << "Error: " << message << std::endl;
@@ -321,10 +325,15 @@ void comms(const string &message, const string &ip, int port, int noise_level)
 // Logic to turn off devices when user exits the threshold area
 void *root_node(void * args)
 {
+    struct RootArgs * arguments = (struct RootArgs *) args;
+
+    if (pthread_setschedparam(pthread_self(), SCHED_RR, priority) == ESRCH) {
+        logmsg(arguments -> time_begin, &(arguments -> alt_tv), (arguments -> log_file), "Unable to set scheduling policy. Performance of Integrate may suffer. Please try to rerun the program with root permissions.", true, 1);
+    }
+
     map<string, LeafDetails> leaf_details;
     int paired_leaves = 0;
 
-    struct RootArgs * arguments = (struct RootArgs *) args;
     timespec new_tv, new_alt_tv;
     new_tv = arguments -> tv;
     new_alt_tv = arguments -> alt_tv;
@@ -440,7 +449,7 @@ void *root_node(void * args)
 
     // calibration phase complete. The root now stores details for every sibling's distance from it's other siblings. We can actually
     // start doing our job now :D
-    
+
     
 
 
@@ -598,16 +607,10 @@ int main()
     args -> socket_fd = sockfd;
     args -> log_file = &logfile;
 
-    sched_param p = {sched_get_priority_max(SCHED_RR)};
-    const sched_param * priority = &p;
-
+   
     if (am_root_node)
     {
         recvfrom(sockfd, node_message, sizeof(node_message), 0, (struct sockaddr *)&client_address, &client_struct_size); // clears socket of data we passed it earlier
-        if (pthread_setschedparam(root_thread, SCHED_RR, priority) != 0) {
-            logmsg(begin, &alttv, &logfile, "Unable to set scheduling policy. Performance of Integrate may suffer. Please try to rerun the program with root permissions.", true, 1);
-        }
-
         pthread_create(&root_thread, NULL, root_node, args);
         while (true) {
 
@@ -615,7 +618,7 @@ int main()
     }
     else
     {
-        if (pthread_setschedparam(leaf_thread, SCHED_RR, priority) != 0) {
+        if (pthread_setschedparam(leaf_thread, SCHED_RR, priority) == ESRCH) {
             logmsg(begin, &alttv, &logfile, "Unable to set scheduling policy. Performance of Integrate may suffer. Please try to rerun the program with root permissions.", true, 1);
         }
         pthread_create(&leaf_thread, NULL, leaf_node, NULL);
