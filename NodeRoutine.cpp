@@ -26,8 +26,8 @@ struct Args {
 
 map<string, LeafDetails> leaf_details;
 
-sched_param p = {sched_get_priority_max(SCHED_RR)};
-const sched_param * priority = &p;
+sched_param pr = {sched_get_priority_max(SCHED_RR)};
+const sched_param * priority = &pr;
 
 
 void logError(const std::string &message)
@@ -622,6 +622,8 @@ int main()
             }
         }
     } else {
+        pr = {sched_get_priority_max(SCHED_FIFO)};
+        priority = &pr;
         pthread_create(&leaf_thread, NULL, leaf_node, args);
         while (true) {
             if (pthread_detach(leaf_thread) == 0) {
