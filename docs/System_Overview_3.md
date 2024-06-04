@@ -18,7 +18,7 @@ Once the `packets_remaining` field has dropped to 0, the sibling will then send 
     type: calibration,
     noise: -87,
     leaf:  fe80::603e:5fff:fe62:1556,
-    distance: 4.6,
+    distance: 4.6
 }
 
 ```

@@ -16,12 +16,14 @@ struct LeafDetails{
     map<string, int> distanceFromSiblings;
 };
 
-struct RootArgs {
+struct Args {
     int socket_fd;
     fstream * log_file;
     double time_begin;
     timespec tv, alt_tv;
     char node_message[200];
+    sockaddr_in6 root_ip;
+    int16_t interval;
 };
 
 map<string, LeafDetails> leaf_details;
@@ -322,10 +324,10 @@ void comms(const string &message, const string &ip, int port, int noise_level)
 // Calculate distances between the user and devices
 // Decide action based on threshold values
 // API calls to control devices based on proximity
-// Logic to turn off devices when user exits the threshold area
+// Logic to turn off devices when user exits the threshold area 
 void *root_node(void * args)
 {
-    struct RootArgs * arguments = (struct RootArgs *) args;
+    struct Args * arguments = (struct Args *) args;
 
     if (pthread_setschedparam(pthread_self(), SCHED_RR, priority) == ESRCH) {
         logmsg(arguments -> time_begin, &(arguments -> alt_tv), (arguments -> log_file), "Unable to set scheduling policy. Performance of Integrate may suffer. Please try to rerun the program with root permissions.", true, 1);
@@ -351,10 +353,10 @@ void *root_node(void * args)
     const sockaddr *generic_addr = reinterpret_cast<const sockaddr *>(&broadcast);
     sockaddr_in6 sender_address;
     socklen_t sender_address_len = sizeof(sender_address);
-    char buffer[1024];
+    char * buffer = arguments -> node_message;
 
     while (paired_leaves < MAX_LEAVES) {
-        memset(buffer, '\0', 1024);
+        memset(buffer, '\0', 200);
         string msg = "{\n\"type\":\"pairing\",\n\"noise\":\"" + to_string(get_noise_level("wlan0")) + "\",\n\"interval\":" + to_string(DEFAULT_INTERVAL + (DEFAULT_INTERVAL * paired_leaves)) + "\n}";
         sendto(sock, msg.c_str(), msg.size(), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
         // recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&sender_address, &sender_address_len); 
@@ -392,7 +394,7 @@ void *root_node(void * args)
     }
 
     // After all leaves are paired, begin calibration process.
-    memset(buffer, '\0', 1024);
+    memset(buffer, '\0', 200);
     ssize_t message_length;
 
     for (int i = 0; i < paired_leaves; i++) {
@@ -450,6 +452,15 @@ void *root_node(void * args)
     // calibration phase complete. The root now stores details for every sibling's distance from it's other siblings. We can actually
     // start doing our job now :D
 
+    // generate candidate list. Also, the root's distance from it's leaves has not yet been determined at this phase. That happens once the 
+    // sniffer thread is running. 
+
+    while (true) {
+        // create sniffer thread and let it begin it's job. From now on we must assume that we are not always in control of the 
+        // CPU, so keep that in mind.
+
+    }
+    
     
 
 
@@ -457,53 +468,45 @@ void *root_node(void * args)
     return NULL;
 }
 
-void *leaf_node(void * /*arg*/){
-    cout << "Waiting for assignment from Root..." << endl;
+void *leaf_node(void * args){
 
-    int sock = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
-    string root_ip = "root_node_ip"; // Root IP should be known or discoverable
-    int local_port = 5000;           // Default port for initial communication
+    struct Args * arguments = (struct Args *) args;
+
+    if (pthread_setschedparam(pthread_self(), SCHED_FIFO, priority) == ESRCH) { // WARNING: this means we HAVE to manually yield thread from here on out
+        logmsg(arguments -> time_begin, &(arguments -> alt_tv), (arguments -> log_file), "Unable to set scheduling policy. Performance of Integrate may suffer. Please try to rerun the program with root permissions.", true, 1);
+    }
+
+    map<string, LeafDetails> leaf_details;
+    int paired_leaves = 0;
+
+    timespec new_tv, new_alt_tv;
+    new_tv = arguments -> tv;
+    new_alt_tv = arguments -> alt_tv;
+    logmsg(arguments -> time_begin, &new_alt_tv, arguments -> log_file, "Leaf status confirmed. Confirming pairing with root.", true);
+
+    int sock = arguments -> socket_fd;
     map<string, string> data;        // To store assigned identifier and port
 
     // Send initial pairing requests until an assignment is received
-    string message = "Pairing request from a new leaf";
-    char buffer[1024];
-    sockaddr_in6 root_address;
+    char * buffer = arguments -> node_message;
+    sockaddr_in6 root_address = arguments -> root_ip;
     socklen_t root_address_len = sizeof(root_address);
     ssize_t message_len;
+    string message = "{\n\"type\":\"pairing\",\n\"noise\":\"" + to_string(get_noise_level("wlan0")) + "\",\nconfirmation: true,\n}";
 
-    while (true)
-    {
-        send_udp_packet(message, root_ip, local_port);
+    sendto(sock, message.c_str(), message.size(), 0, (struct sockaddr *)&root_address, sizeof(root_address));
+    // confirmation for pairing with the root. 
 
-        message_len = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&root_address, &root_address_len);
-        if (message_len > 0)
-        {
-            buffer[message_len] = '\0';
-            data = parse_json(buffer);
-            if (data.count("identifier") > 0 && data.count("port") > 0)
-            {
-                cout << "Assigned as " << data["identifier"] << " with port " << data["port"] << endl;
-                local_port = stoi(data["port"]); // Update local port with assigned port
-                break;                           // Exit loop after assignment
-            }
-        }
-        sleep(1); // Retry interval
-    }
 
-    // After assignment, continue regular operations
-    while (true)
-    {
-        int noise_level = get_noise_level("wlan0");
-        cout << data["identifier"] << ": Noise level: " << noise_level << endl;
+    /*
+        Need to begin sniffer thread here before entering while loop for socket operations. 
+        That means we need to make the shared memory buffer and everything else that the leaf and sniffer both need to communicate.
+    */
 
-        // Update message with current status
-        message = "Status update from " + data["identifier"] + ", noise level: " + to_string(noise_level);
-        // Use the comms function to determine the best protocol based on noise level
-        comms(message, root_ip, local_port, noise_level);
-
-        sleep(10);
-    }
+   while (true) {
+        
+   }
+   
 
     close(sock);
     return NULL;
@@ -513,7 +516,7 @@ void *leaf_node(void * /*arg*/){
 int main()
 {
     cout << "-------------------------- Project Integrate --------------------------" << endl;
-    RootArgs * args = (struct RootArgs *)malloc(sizeof(struct RootArgs));
+    Args * args = (struct Args *)malloc(sizeof(struct Args));
     fstream logfile;
     struct timespec tv, alttv;
     double begin = epoch_double(&tv);
@@ -588,14 +591,13 @@ int main()
         if (recvfrom(sockfd, node_message, sizeof(node_message), 0, (struct sockaddr *)&client_address, &client_struct_size) > 0)
         {
             packet = parse_json(node_message);
-            if (packet.find("interval") != packet.end())
-            {
+            if (packet.find("interval") != packet.end()) {
                 am_root_node = false;
+                args -> root_ip = client_address;
+                args -> interval = stoi(packet["interval"]);
                 break;
             }
-        }
-        else
-        {
+        } else {
             sendto(sockfd, msg, sizeof(msg), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
         }
         sleep(1);
@@ -607,31 +609,25 @@ int main()
     args -> socket_fd = sockfd;
     args -> log_file = &logfile;
 
-   
-    if (am_root_node)
-    {
-        recvfrom(sockfd, node_message, sizeof(node_message), 0, (struct sockaddr *)&client_address, &client_struct_size); // clears socket of data we passed it earlier
+    recvfrom(sockfd, node_message, sizeof(node_message), 0, (struct sockaddr *)&client_address, &client_struct_size); // clears socket of data we passed it earlier
+    if (am_root_node) {
         pthread_create(&root_thread, NULL, root_node, args);
         while (true) {
-
+            if (pthread_detach(root_thread) == 0) {
+                break;
+            }
         }
-    }
-    else
-    {
-        if (pthread_setschedparam(leaf_thread, SCHED_RR, priority) == ESRCH) {
-            logmsg(begin, &alttv, &logfile, "Unable to set scheduling policy. Performance of Integrate may suffer. Please try to rerun the program with root permissions.", true, 1);
-        }
-        pthread_create(&leaf_thread, NULL, leaf_node, NULL);
-        
+    } else {
+        pthread_create(&leaf_thread, NULL, leaf_node, args);
         while (true) {
-            
+            if (pthread_detach(leaf_thread) == 0) {
+                break;
+            }
         }
     }
 
-    logfile.close();
-    close(sockfd);
-
-    return 0;
+    
+    pthread_exit(NULL);
 }
 #endif
 
