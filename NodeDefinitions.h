@@ -36,6 +36,11 @@
 #define WARN 1
 #define ERROR 2
 
+#define MAX_LEAVES 3
+#define DEFAULT_INTERVAL 50
+
+typedef char MAC[48];
+
 namespace LML
 {
     std::string createPacket(const std::map<std::string, std::string> &data);

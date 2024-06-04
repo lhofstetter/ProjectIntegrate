@@ -1,6 +1,4 @@
 #include "NodeDefinitions.h"
-#define MAX_LEAVES 3
-#define DEFAULT_INTERVAL 50
 
 using namespace std;
 //using namespace cpr;
@@ -472,7 +470,7 @@ void *leaf_node(void * args){
 
     struct Args * arguments = (struct Args *) args;
 
-    if (pthread_setschedparam(pthread_self(), SCHED_FIFO, priority) == ESRCH) { // WARNING: this means we HAVE to manually yield thread from here on out
+    if (pthread_setschedparam(pthread_self(), SCHED_FIFO, priority) != 0) { // WARNING: successful scheduling policy change means we HAVE to manually yield thread from here on out
         logmsg(arguments -> time_begin, &(arguments -> alt_tv), (arguments -> log_file), "Unable to set scheduling policy. Performance of Integrate may suffer. Please try to rerun the program with root permissions.", true, 1);
     }
 
@@ -482,10 +480,11 @@ void *leaf_node(void * args){
     timespec new_tv, new_alt_tv;
     new_tv = arguments -> tv;
     new_alt_tv = arguments -> alt_tv;
+    timespec ints_tv;
     logmsg(arguments -> time_begin, &new_alt_tv, arguments -> log_file, "Leaf status confirmed. Confirming pairing with root.", true);
 
     int sock = arguments -> socket_fd;
-    map<string, string> data;        // To store assigned identifier and port
+    map<string, string> data;        // To store assigned identifier and port 
 
     // Send initial pairing requests until an assignment is received
     char * buffer = arguments -> node_message;
@@ -497,14 +496,19 @@ void *leaf_node(void * args){
     sendto(sock, message.c_str(), message.size(), 0, (struct sockaddr *)&root_address, sizeof(root_address));
     // confirmation for pairing with the root. 
 
-
     /*
         Need to begin sniffer thread here before entering while loop for socket operations. 
         That means we need to make the shared memory buffer and everything else that the leaf and sniffer both need to communicate.
     */
 
-   while (true) {
+   
+   
+   while (true) { // this is probably gonna end up as a simple event-driven system - in order to enable it to respond to different messages from root.
+        double interval_start = epoch_double(&ints_tv);
+        while (epoch_double(&ints_tv) - interval_start < arguments -> interval) { // could potentially miss an interval deadline because multithreading, but it shouldn't matter because the 
+        // root shouldn't actually impose the deadline - that just gives the root a way of communicating to leaves to "space out" their packets so processing can be done before receiving another packet. 
         
+        }
    }
    
 
