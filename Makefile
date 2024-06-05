@@ -1,7 +1,8 @@
 #Compiler Options
+#sudo apt-get install libcurl4-openssl-dev (rasp)
 CC = g++
 CFLAGS = -Wall -Wextra -std=c++17
-LDFLAGS = -lpcap -lpthread -lcpr 
+LDFLAGS = -lpcap -lpthread -lcurl 
 
 #Targets
 all : RSSI NodeRoutine
