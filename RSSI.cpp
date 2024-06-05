@@ -3,6 +3,7 @@
 #include <pthread.h>
 #include <arpa/inet.h>
 #include <string.h>
+#include <math.h>
 
 void getDeviceID(pcap_if_t **all_devs, pcap_if_t **node_curr, char error_buff[], char **devID, bool debug);
 void my_callback(u_char *user,const struct pcap_pkthdr* header,const u_char* bytes);
@@ -21,6 +22,13 @@ struct deviceInfo{
     char *dev_ID;       /* Name of device */
     char error_buffer[PCAP_ERRBUF_SIZE]; /* Error buffer */
 }devRecog;
+
+struct capture{
+    char mac_addr[11];
+    int8_t rssi;
+    char oui [5];
+    std::string vendor;
+}capture;
 
 /* Main Function */
 int main()
@@ -122,8 +130,18 @@ void my_callback(u_char *user,const struct pcap_pkthdr* header,const u_char* byt
     if(temp >= packet_length){
         printf("Vendor ID not found\n");
     }
+    double static_rssi_1m = -49;
+    double distance = pow(10,((static_rssi_1m - rssi)/(10*2.5))); /* 2 < N < 4*/
+    printf("Distance: %f\n",distance);
+
     printf("\n---------------------------------------\n");
- 
+    
+ /*
+ Hash map to store the candidates
+ */
+
+
+
    /*
     if(oui does not exist in the database){
             send the mac address to https://www.macvendorlookup.com/api/v2/{MAC_Address}
@@ -142,7 +160,7 @@ void my_callback(u_char *user,const struct pcap_pkthdr* header,const u_char* byt
             using the rssi perform the distance calculations
             send the distance calc to the main pi
     }
-f
+
     write data to shared memory buffer
     figure out buffer between socket and sniffer
     reverse ARP for IPv6 
