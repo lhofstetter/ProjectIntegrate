@@ -243,6 +243,7 @@ std::string exec(const char *cmd)
     return result;
 }
 
+// Get Noise level from NIC
 int get_noise_level(const std::string &interface)
 {
     std::string command = "iwconfig " + interface;
@@ -260,6 +261,22 @@ int get_noise_level(const std::string &interface)
     return noise_level;
 }
 
+// OPTIONAL: Shortcut function to determine best protocol if needed
+void comms(const string &message, const string &ip, int port, int noise_level)
+{
+    if (noise_level < -80)
+    {
+        cout << "Low noise level detected. Using UDP for communication." << endl;
+        send_udp_packet(message, ip, port);
+    }
+    else
+    {
+        cout << "High noise level detected. Using TCP for communication." << endl;
+        send_tcp_packet(message, ip, port);
+    }
+}
+
+// Prepare UDP packet
 void send_udp_packet(const std::string &message, const std::string &ip, int port)
 {
     int sockfd = socket(AF_INET6, SOCK_DGRAM, 0);
@@ -280,6 +297,7 @@ void send_udp_packet(const std::string &message, const std::string &ip, int port
     close(sockfd);
 }
 
+// Prepare TCP packet
 void send_tcp_packet(const std::string &message, const std::string &ip, int port)
 {
     int sockfd = socket(AF_INET6, SOCK_STREAM, 0);
@@ -358,22 +376,8 @@ void govee_api(const std::string &device_id, const std::string &action, const st
     }
 }
 
-// Shortcut function to determine best protocol if needed
-void comms(const string &message, const string &ip, int port, int noise_level)
-{
-    if (noise_level < -80)
-    {
-        cout << "Low noise level detected. Using UDP for communication." << endl;
-        send_udp_packet(message, ip, port);
-    }
-    else
-    {
-        cout << "High noise level detected. Using TCP for communication." << endl;
-        send_tcp_packet(message, ip, port);
-    }
-}
-
-// START OF ALERT SYSTEM FUNCTION - To be called by other critical operations to send SMS to owner.
+// START OF ALERT SYSTEM FUNCTION
+// To be called by other critical operations to send SMS to owner (optional)
 void alertSystem(const std::string &message)
 {
     static std::chrono::steady_clock::time_point last_alert_time;

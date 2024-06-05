@@ -41,11 +41,12 @@
 
 #define GOVEE_API_URL "https://developer-api.govee.com/v1/devices/control"
 #define GOVEE_API_KEY "api_key_here"
+
 #define SMS_API_URL "https://api.twilio.com/2010-04-01/Accounts/ACCOUNT_SID/Messages.json"
-#define SMS_API_KEY "twilio_auth_token"        // Twilio Auth Token
+#define SMS_API_KEY "twilio_auth_token"
 #define SMS_PHONE_NUMBER "+1234567890"         // Twilio phone number
 #define DESTINATION_PHONE_NUMBER "+1234567890" // Recipient's number
-#define TWILIO_ACCOUNT_SID "ACCOUNT_SID"       // Your Twilio Account SID
+#define TWILIO_ACCOUNT_SID "ACCOUNT_SID"       // Twilio Account SID
 
 typedef char MAC[48];
 
