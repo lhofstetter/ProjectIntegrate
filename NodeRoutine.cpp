@@ -3,6 +3,10 @@
 using namespace std;
 
 const string LML_Types[] = {"type", "noise", "candidate", "signal_data", "device", "action", "configure", "port", "protocol", "name_of_device", "devices", "socket_to_communicate", "type_of_socket_used_for_communication", "interval"};
+vector<string> deviceIDs = {"device_id_1", "device_id_2", "device_id_3"};
+map<string, LeafDetails> leaf_details;
+sched_param pr = {sched_get_priority_max(SCHED_RR)};
+const sched_param *priority = &pr;
 
 struct LeafDetails
 {
@@ -12,6 +16,7 @@ struct LeafDetails
     int socket;
     int interval;
     map<string, int> distanceFromSiblings;
+    string deviceID;
 };
 
 struct Args
@@ -25,11 +30,6 @@ struct Args
     int16_t interval;
 };
 
-map<string, LeafDetails> leaf_details;
-
-sched_param pr = {sched_get_priority_max(SCHED_RR)};
-const sched_param *priority = &pr;
-
 void logError(const std::string &message)
 {
     std::cerr << "Error: " << message << std::endl;
@@ -41,10 +41,27 @@ void logError(const std::string &message)
     }
 }
 
-void alertSystem(const std::string &message)
+void assignDeviceIDs()
 {
-    std::cerr << "Alert: " << message << std::endl;
-    // More implementation in the future, example SMS text
+    int index = 0;
+    for (auto &leaf_pair : leaf_details)
+    {
+        leaf_pair.second.deviceID = deviceIDs[index % deviceIDs.size()];
+        index++;
+    }
+}
+
+void handleLeafRequest(const std::string &leafID, const std::string &action, const std::string &value)
+{
+    auto it = leaf_details.find(leafID);
+    if (it != leaf_details.end())
+    {
+        govee_api(GOVEE_API_KEY, it->second.deviceID, action, value); // Use the GOVEE_API_KEY macro here
+    }
+    else
+    {
+        std::cerr << "Leaf ID not found: " << leafID << std::endl;
+    }
 }
 
 // LML Functions
@@ -289,18 +306,58 @@ void send_tcp_packet(const std::string &message, const std::string &ip, int port
     send(sockfd, message.c_str(), message.size(), 0);
     close(sockfd);
 }
-/*
-void govee_api(const std::string &api_key = "", const std::string &device_id = "", const std::string &action = "", const std::string &value = "")
-{
-    Url url = "https://developer-api.govee.com/v1/devices/control";
-    Header headers = {{"Content-Type", "application/json"}, {"Govee-API-Key", api_key}};
-    Body body = "{\"device\": \"" + device_id + "\", \"model\": \"H6008\", \"cmd\": {\"name\": \"" + action + "\", \"value\": \"" + value + "\"}}";
 
-    Response r = Post(url, headers, body);
-    std::cout << "Status code: " << r.status_code << std::endl;
-    std::cout << "Response body: " << r.text << std::endl;
+// Callback for govee_api
+static size_t GoveeCallback(void *contents, size_t size, size_t nmemb, void *userp)
+{
+    ((std::string *)userp)->append((char *)contents, size * nmemb);
+    return size * nmemb;
 }
-*/
+
+// Function to send API requests to Govee
+void govee_api(const std::string &device_id, const std::string &action, const std::string &value)
+{
+    CURL *curl;
+    CURLcode res;
+    std::string readBuffer;
+    std::string postData = "{\"device\": \"" + device_id + "\", \"model\": \"H6008\", \"cmd\": {\"name\": \"" + action + "\", \"value\": \"" + value + "\"}}";
+
+    curl = curl_easy_init();
+    if (curl)
+    {
+        struct curl_slist *headers = NULL;
+        headers = curl_slist_append(headers, "Content-Type: application/json");
+        std::string authHeader = "Govee-API-Key: " + std::string(GOVEE_API_KEY);
+        headers = curl_slist_append(headers, authHeader.c_str());
+
+        curl_easy_setopt(curl, CURLOPT_URL, GOVEE_API_URL);
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postData.c_str());
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, GoveeCallback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+
+        res = curl_easy_perform(curl);
+        if (res != CURLE_OK)
+        {
+            std::string error_message = "Govee API call failed: " + std::string(curl_easy_strerror(res));
+            std::cerr << error_message << std::endl;
+            // alertSystem(error_message); // Trigger alert system on failure
+        }
+        else
+        {
+            std::cout << "HTTP Response:\n"
+                      << readBuffer << std::endl;
+        }
+
+        curl_easy_cleanup(curl);
+        curl_slist_free_all(headers);
+    }
+    else
+    {
+        alertSystem("Failed to initialize CURL for Govee API call.");
+    }
+}
+
 // Shortcut function to determine best protocol if needed
 void comms(const string &message, const string &ip, int port, int noise_level)
 {
@@ -315,6 +372,72 @@ void comms(const string &message, const string &ip, int port, int noise_level)
         send_tcp_packet(message, ip, port);
     }
 }
+
+// START OF ALERT SYSTEM FUNCTION - To be called by other critical operations to send SMS to owner.
+void alertSystem(const std::string &message)
+{
+    static std::chrono::steady_clock::time_point last_alert_time;
+    std::chrono::seconds alert_cooldown(300); // 5 minutes cooldown
+
+    auto now = std::chrono::steady_clock::now();
+    if (now - last_alert_time > alert_cooldown)
+    {
+        last_alert_time = now;
+        std::cerr << "Alert: " << message << std::endl;
+        sendSMS(message, DESTINATION_PHONE_NUMBER);
+    }
+    else
+    {
+        std::cerr << "Alert suppressed (cooldown): " << message << std::endl;
+    }
+}
+
+// Callback function for SMS response
+static size_t SMSResponseCallback(void *contents, size_t size, size_t nmemb, void *userp)
+{
+    ((std::string *)userp)->append((char *)contents, size * nmemb);
+    return size * nmemb;
+}
+
+// Function to send SMS using Twilio API
+void sendSMS(const std::string &message, const std::string &recipientNumber)
+{
+    CURL *curl;
+    CURLcode res;
+    std::string readBuffer;
+
+    curl = curl_easy_init();
+    if (curl)
+    {
+        char *escapedMessage = curl_easy_escape(curl, message.c_str(), message.length());
+        if (escapedMessage)
+        {
+            std::string postData = "To=" + recipientNumber + "&From=" + SMS_PHONE_NUMBER + "&Body=" + escapedMessage;
+
+            curl_easy_setopt(curl, CURLOPT_USERNAME, TWILIO_ACCOUNT_SID);
+            curl_easy_setopt(curl, CURLOPT_PASSWORD, SMS_API_KEY);
+            curl_easy_setopt(curl, CURLOPT_URL, SMS_API_URL);
+            curl_easy_setopt(curl, CURLOPT_POST, 1L);
+            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, postData.c_str());
+            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, SMSResponseCallback);
+            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+
+            res = curl_easy_perform(curl);
+            if (res != CURLE_OK)
+            {
+                std::cerr << "curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
+            }
+            else
+            {
+                std::cout << "SMS sent successfully: " << readBuffer << std::endl;
+            }
+
+            curl_free(escapedMessage);
+        }
+        curl_easy_cleanup(curl);
+    }
+}
+
 // After pairing, parent needs to listen to children
 // @todo: Implement sockets setup for communication with children
 // @todo: Implement logic for distance measurements from children
@@ -381,6 +504,7 @@ void *root_node(void *args)
         }
         sleep(5);
     }
+    assignDeviceIDs();
 
     logmsg(arguments->time_begin, &new_alt_tv, arguments->log_file, "All leaves paired.", true);
 
@@ -465,7 +589,30 @@ void *root_node(void *args)
                     continue; // we don't know what packet this is, but it's not one we care about. Move on.
                 }
             }
+        } // handleLeafRequest(leafID, action, value); add this in to handle leaftrequests
+          // Potential example??
+        /* logmsg(arguments->time_begin, &new_alt_tv, arguments->log_file, "Calibration complete. System operational.", true);
+while (true) {
+    memset(buffer, 0, 200);
+    ssize_t message_len = recvfrom(sock, buffer, 200, 0, (struct sockaddr *)&sender_address, &sender_address_len);
+    if (message_len > 0) {
+        buffer[message_len] = '\0';
+        map<string, string> packet = parse_json(buffer);
+
+        // Check for specific commands or status updates from leaf nodes
+        if (packet["type"] == "command" && packet.count("command") && packet.count("leafID")) {
+            string leafID = packet["leafID"];
+            string command = packet["command"];
+            string value = packet.count("value") ? packet["value"] : "";
+            handleLeafRequest(leafID, command, value);
         }
+    }
+}
+delete[] buffer;
+close(sock);
+return NULL;
+}
+*/
     }
 
     // calibration phase complete. The root now stores details for every sibling's distance from it's other siblings. We can actually
@@ -526,7 +673,7 @@ void *leaf_node(void *args)
         double interval_start = epoch_double(&ints_tv);
         while (epoch_double(&ints_tv) - interval_start < arguments->interval)
         { // could potentially miss an interval deadline because multithreading, but it shouldn't matter because the
-            // root shouldn't actually impose the deadline - that just gives the root a way of communicating to leaves to "space out" their packets so processing can be done before receiving another packet.
+          // root shouldn't actually impose the deadline - that just gives the root a way of communicating to leaves to "space out" their packets so processing can be done before receiving another packet.
         }
     }
 

@@ -25,7 +25,6 @@
 #include <map>
 #include <pthread.h>
 #include <curl/curl.h>
-// #include <cpr/cpr.h>
 #include <sys/resource.h>
 #include <sys/select.h>
 
@@ -39,6 +38,14 @@
 
 #define MAX_LEAVES 3
 #define DEFAULT_INTERVAL 50
+
+#define GOVEE_API_URL "https://developer-api.govee.com/v1/devices/control"
+#define GOVEE_API_KEY "api_key_here"
+#define SMS_API_URL "https://api.twilio.com/2010-04-01/Accounts/ACCOUNT_SID/Messages.json"
+#define SMS_API_KEY "twilio_auth_token"        // Twilio Auth Token
+#define SMS_PHONE_NUMBER "+1234567890"         // Twilio phone number
+#define DESTINATION_PHONE_NUMBER "+1234567890" // Recipient's number
+#define TWILIO_ACCOUNT_SID "ACCOUNT_SID"       // Your Twilio Account SID
 
 typedef char MAC[48];
 
