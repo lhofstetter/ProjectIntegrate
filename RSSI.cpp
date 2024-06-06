@@ -7,6 +7,7 @@
 
 void getDeviceID(pcap_if_t **all_devs, pcap_if_t **node_curr, char error_buff[], char **devID, bool debug);
 void my_callback(u_char *user,const struct pcap_pkthdr* header,const u_char* bytes);
+void *sniff(void *args);
 
 /* Struct for packet capture */
 struct sniffer{
@@ -24,15 +25,19 @@ struct deviceInfo{
 }devRecog;
 
 struct capture{
-    char mac_addr[11];
+    char mac_addr[18];
     int8_t rssi;
-    char oui [5];
-    std::string vendor;
+    char oui[9];
+    double distance;
 }capture;
 
 /* Main Function */
-int main()
-{
+int main(){
+
+
+}
+
+void *sniff(void *args){
     /* Get wireless devices info */
     getDeviceID(&devRecog.alldevs, &devRecog.node, devRecog.error_buffer, &devRecog.dev_ID, true);
 
@@ -105,23 +110,22 @@ void my_callback(u_char *user,const struct pcap_pkthdr* header,const u_char* byt
     uint16_t radiotap_len = bytes[2] + (bytes[3] << 8);
     
     /* RSSI is the last element in Radiotap Header*/
-    int8_t rssi = (int8_t)bytes[radiotap_len-1];
+    capture.rssi = (int8_t)bytes[radiotap_len-1];
     printf("\n---------------------------------------\n");
-    printf("RSSI: %d \n",rssi);
+    printf("RSSI: %d \n",capture.rssi);
 
     /* Mac address is typically 10 byte offset from Radiotap header*/
     int src_mac = radiotap_len + 10;
 
-    char mac_addr[18];
-    sprintf(mac_addr,"%02x:%02x:%02x:%02x:%02x:%02x", bytes[src_mac], bytes[src_mac + 1], bytes[src_mac + 2],bytes[src_mac+3], bytes[src_mac + 4], bytes[src_mac + 5]);
-    printf("MAC: %s\n",mac_addr);
-
-    int management = radiotap_len + 24; //
+   // char mac_addr[18];
+    sprintf(capture.mac_addr,"%02x:%02x:%02x:%02x:%02x:%02x", bytes[src_mac], bytes[src_mac + 1], bytes[src_mac + 2],bytes[src_mac+3], bytes[src_mac + 4], bytes[src_mac + 5]);
+    printf("MAC: %s\n",capture.mac_addr);
+    int management = radiotap_len + 24;
     int temp = management;
     while(temp >= packet_length){
         if(bytes[temp]==221){
-            printf("Test: %i\n",bytes[temp]);
-            printf("Vendor is: %02x:%02x:%02x\n",bytes[temp+2],bytes[temp+3],bytes[temp+4]);
+            sprintf(capture.oui,"%02x:%02x:%02x",bytes[temp+2],bytes[temp+3],bytes[temp+4]);
+            std::cout<< "Vendor OUI: "<< capture.oui<<std::endl;
             temp = 0;
             break;
         }
@@ -131,15 +135,19 @@ void my_callback(u_char *user,const struct pcap_pkthdr* header,const u_char* byt
         printf("Vendor ID not found\n");
     }
     double static_rssi_1m = -49;
-    double distance = pow(10,((static_rssi_1m - rssi)/(10*2.5))); /* 2 < N < 4*/
-    printf("Distance: %f\n",distance);
+    capture.distance = pow(10,((static_rssi_1m - capture.rssi)/(10*2.5))); /* 2 < N < 4*/
+    printf("Distance: %f\n",capture.distance);
 
     printf("\n---------------------------------------\n");
     
  /*
+Node must ger RSSI from the child node and every other node to calc distances (for triangulation)
+if statement to check the condition if indormation was received from each node
+
+
  Hash map to store the candidates
  */
-
+//Shared memory buffer
 
 
    /*
@@ -166,7 +174,6 @@ void my_callback(u_char *user,const struct pcap_pkthdr* header,const u_char* byt
     reverse ARP for IPv6 
     store everything in a struct.
    
-    *This logic may not work with apples private addresses
 
    */
 }   
