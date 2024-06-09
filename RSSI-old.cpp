@@ -7,35 +7,21 @@
 
 void getDeviceID(pcap_if_t **all_devs, pcap_if_t **node_curr, char error_buff[], char **devID, bool debug);
 void my_callback(u_char *user,const struct pcap_pkthdr* header,const u_char* bytes);
-void *sniff(void *args);
 
-// /* Struct for packet capture */
-// struct sniffer{
-//     pcap_t *dev_handler;    /* Handler for reading pkt data */
-//     struct pcap_pkthdr * packet_header; /* Packet struct */
-//     const u_char *packet; /* Holds bytes of data from pkt */
-// }sniffArgs;
-
-// /* Parameters for device recognition */
-// struct deviceInfo{
-//     pcap_if_t *alldevs; /* List that holds all network devices */
-//     pcap_if_t *node;    /* Node used for sniffing */
-//     char *dev_ID;       /* Name of device */
-//     char error_buffer[PCAP_ERRBUF_SIZE]; /* Error buffer */
-// }devRecog;
-
-struct sniff_input{
-    /* Sniffer specific args */
+/* Struct for packet capture */
+struct sniffer{
     pcap_t *dev_handler;    /* Handler for reading pkt data */
-    struct pcap_pkthdr *packet_header; /* Packet struct */
+    struct pcap_pkthdr * packet_header; /* Packet struct */
     const u_char *packet; /* Holds bytes of data from pkt */
+}sniffArgs;
 
-    /* Device info specific args */
+/* Parameters for device recognition */
+struct deviceInfo{
     pcap_if_t *alldevs; /* List that holds all network devices */
     pcap_if_t *node;    /* Node used for sniffing */
     char *dev_ID;       /* Name of device */
     char error_buffer[PCAP_ERRBUF_SIZE]; /* Error buffer */
-}sniffinput;
+}devRecog;
 
 struct capture{
     char mac_addr[18];
@@ -46,50 +32,38 @@ struct capture{
 
 /* Main Function */
 int main(){
-
-pthread_t test;
-
-pthread_create(&test,NULL,sniff,&sniffinput);
-
-pthread_join(test,NULL);
-}
-
-/* Order for arguments: <struct deviceInfo, struct sniffer>*/
-void *sniff(void *args){
-    struct sniff_input* input = (struct sniff_input*)args;
-
     /* Get wireless devices info */
-    getDeviceID(&input->alldevs, &input->node, input->error_buffer, &input->dev_ID, true);
-    
+    getDeviceID(&devRecog.alldevs, &devRecog.node, devRecog.error_buffer, &devRecog.dev_ID, true);
+
     /* Create the handler to begin setup */
-    if ((input->dev_handler = pcap_create(input->dev_ID, input->error_buffer)) == NULL)
+    if ((sniffArgs.dev_handler = pcap_create(devRecog.dev_ID, devRecog.error_buffer)) == NULL)
     {
-        printf("Error creating handler %s\n", input->error_buffer);
+        printf("Error creating handler %s\n", devRecog.error_buffer);
         exit(1);
     }
 
     /* Set the default values for the handler */
-    pcap_set_snaplen(input->dev_handler, 2048); /* Snapshot length */
-    if(pcap_can_set_rfmon(input->dev_handler)){
-        pcap_set_rfmon(input->dev_handler,1);  /* Monitor Mode */
+    pcap_set_snaplen(sniffArgs.dev_handler, 2048); /* Snapshot length */
+    if(pcap_can_set_rfmon(sniffArgs.dev_handler)){
+        pcap_set_rfmon(sniffArgs.dev_handler,1);  /* Monitor Mode */
     }
-    pcap_set_timeout(input->dev_handler,512); /* 512ms timeout */
+    pcap_set_timeout(sniffArgs.dev_handler,512); /* 512ms timeout */
 
     /* Activate the handler to begin looping */
-    int err = pcap_activate(input->dev_handler);
+    int err = pcap_activate(sniffArgs.dev_handler);
     if( err == 0){
         printf("Device handler activated sucessfully!\n");
     }else if (err > 0){
-        pcap_perror(input->dev_handler,"Device handler activated with warnings!");
+        pcap_perror(sniffArgs.dev_handler,"Device handler activated with warnings!");
     }else{
-        pcap_perror(input->dev_handler,"Device handler activation failed!");
-        pcap_close(input->dev_handler);
+        pcap_perror(sniffArgs.dev_handler,"Device handler activation failed!");
+        pcap_close(sniffArgs.dev_handler);
         exit(1);
     }
     
-    pcap_loop(input->dev_handler,50,my_callback,NULL);
+    pcap_loop(sniffArgs.dev_handler,50,my_callback,NULL);
 
-    pcap_close(input->dev_handler);
+    pcap_close(sniffArgs.dev_handler);
     return 0;
 }
 
@@ -140,7 +114,7 @@ void my_callback(u_char *user,const struct pcap_pkthdr* header,const u_char* byt
    // char mac_addr[18];
     sprintf(capture.mac_addr,"%02x:%02x:%02x:%02x:%02x:%02x", bytes[src_mac], bytes[src_mac + 1], bytes[src_mac + 2],bytes[src_mac+3], bytes[src_mac + 4], bytes[src_mac + 5]);
     printf("MAC: %s\n",capture.mac_addr);
-    int management = radiotap_len + 24;
+    int management = radiotap_len + 24; /* Start of the management header field (lpcap) */
     int temp = management;
     while(temp >= packet_length){
         if(bytes[temp]==221){
