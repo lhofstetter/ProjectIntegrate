@@ -16,4 +16,4 @@ NodeRoutine: NodeRoutine.o
 NodeRoutine.o: NodeRoutine.cpp
 
 clean:
-	rm -f *.o NodeRoutine lml_test log.txt
+	rm -f *.o NodeRoutine lml_test log.txt rssi.txt

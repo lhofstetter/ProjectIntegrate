@@ -10,6 +10,7 @@ unsigned char noise_level;
 unsigned char interval;
 
 const string LML_Types[] = {"type", "noise", "candidate", "signal_data", "device", "action", "configure", "port", "protocol", "name_of_device", "devices", "socket_to_communicate", "type_of_socket_used_for_communication", "interval"};
+std::ofstream rssi_log("rssi.txt", std::ios::app);
 
 // Global Structs
 struct LeafDetails
@@ -470,65 +471,82 @@ void govee_api(const string &device_id, const string &action, const string &valu
 */
 
 // RSSI void functions and thread
+void logRSSI(const std::string &message)
+{
+    if (!rssi_log.is_open())
+    {
+        std::cerr << "Failed to open rssi.txt for logging." << std::endl;
+        return;
+    }
+    rssi_log << message << std::endl;
+}
+
 void getDeviceID(pcap_if_t **all_devs, pcap_if_t **node_curr, char error_buff[], char **devID, bool debug)
 {
     if (pcap_findalldevs(all_devs, error_buff) != 0)
     {
-        logError("Error finding device: " + std::string(error_buff));
+        logRSSI("Error finding device: " + std::string(error_buff));
         exit(1);
     }
 
+    std::ostringstream msg;
     for (*node_curr = *all_devs; *node_curr; *node_curr = (*node_curr)->next)
     {
         if (debug)
         {
-            printf("Device: %s\n", (*node_curr)->name);
+            msg << "Device: " << (*node_curr)->name << "\n";
+            logRSSI(msg.str());
+            msg.str(""); // Clear the stream
         }
         if (((*node_curr)->flags & PCAP_IF_WIRELESS) && ((*node_curr)->flags & PCAP_IF_RUNNING))
         {
             *devID = (*node_curr)->name;
-            printf("Using device: %s\n", *devID);
+            logRSSI("Using device: " + std::string(*devID));
             return;
         }
     }
 
-    logError("Suitable device not found.");
+    logRSSI("Suitable device not found.");
     exit(1);
 }
 
 void my_callback(u_char *unused, const struct pcap_pkthdr *header, const u_char *bytes)
 {
-    (void)unused; // Ignore unused parameter warning
+    (void)unused; // Ignore unused parameter
 
     bpf_u_int32 packet_length = header->caplen;
     uint16_t radiotap_len = bytes[2] + (bytes[3] << 8);
 
     capture.rssi = (int8_t)bytes[radiotap_len - 1];
     int src_mac = radiotap_len + 10;
-
-    snprintf(capture.mac_addr, sizeof(capture.mac_addr), "%02x:%02x:%02x:%02x:%02x:%02x",
+    char mac_addr[18];
+    snprintf(mac_addr, sizeof(mac_addr), "%02x:%02x:%02x:%02x:%02x:%02x",
              bytes[src_mac], bytes[src_mac + 1], bytes[src_mac + 2], bytes[src_mac + 3],
              bytes[src_mac + 4], bytes[src_mac + 5]);
-    printf("\n---------------------------------------\n");
-    printf("RSSI: %d dBm\n", capture.rssi);
-    printf("MAC Address: %s\n", capture.mac_addr);
+
+    std::ostringstream msg;
+    msg << "\n---------------------------------------\n"
+        << "RSSI: " << int(capture.rssi) << " dBm\n"
+        << "MAC Address: " << mac_addr << "\n";
 
     int temp = radiotap_len + 24;
     if (static_cast<bpf_u_int32>(temp) < packet_length && bytes[temp] == 221)
     {
-        snprintf(capture.oui, sizeof(capture.oui), "%02x:%02x:%02x",
-                 bytes[temp + 2], bytes[temp + 3], bytes[temp + 4]);
-        printf("Vendor OUI: %s\n", capture.oui);
+        char oui[9];
+        snprintf(oui, sizeof(oui), "%02x:%02x:%02x", bytes[temp + 2], bytes[temp + 3], bytes[temp + 4]);
+        msg << "Vendor OUI: " << oui << "\n";
     }
     else
     {
-        printf("Vendor ID not found.\n");
+        msg << "Vendor ID not found.\n";
     }
 
     double static_rssi_1m = -49; // RSSI at 1 meter
-    capture.distance = pow(10, ((static_rssi_1m - capture.rssi) / (10 * 2.5)));
-    printf("Estimated Distance: %.3f meters\n", capture.distance);
-    printf("---------------------------------------\n");
+    double distance = pow(10, ((static_rssi_1m - capture.rssi) / (10 * 2.5)));
+    msg << "Estimated Distance: " << distance << " meters\n"
+        << "---------------------------------------\n";
+
+    logRSSI(msg.str());
 }
 
 void *rssi_thread_func(void *args)

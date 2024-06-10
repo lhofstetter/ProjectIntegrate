@@ -1,7 +1,7 @@
-RSSI
-RSSI.o
+log.txt
+rssi.txt
 NodeRoutine
 NodeRoutine.o
-log.txt
 lml.o
 lml_test
+
