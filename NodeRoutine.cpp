@@ -2,8 +2,17 @@
 
 using namespace std;
 
+map<string, LeafDetails> leaf_details;
+vector<string> deviceIDs = {"device_id_1", "device_id_2", "device_id_3"};
+sched_param pr = {sched_get_priority_max(SCHED_RR)};
+const sched_param *priority = &pr;
+const unsigned char LML_types[] = {0b000, 0b001, 0b010, 0b011, 0b100, 0b101, 0b110, 0b111};
+unsigned char noise_level;
+unsigned char interval;
+
 const string LML_Types[] = {"type", "noise", "candidate", "signal_data", "device", "action", "configure", "port", "protocol", "name_of_device", "devices", "socket_to_communicate", "type_of_socket_used_for_communication", "interval"};
 
+// Global Structs
 struct LeafDetails
 {
     int port;
@@ -26,15 +35,23 @@ struct Args
     int16_t interval;
 };
 
-map<string, LeafDetails> leaf_details;
-vector<string> deviceIDs = {"device_id_1", "device_id_2", "device_id_3"};
-sched_param pr = {sched_get_priority_max(SCHED_RR)};
-const sched_param *priority = &pr;
+// RSSI Thread Structs
+struct sniff_input
+{
+    pcap_t *dev_handler;
+    pcap_if_t *alldevs;
+    pcap_if_t *node;
+    char *dev_ID;
+    char error_buffer[PCAP_ERRBUF_SIZE];
+} sniffinput;
 
-const unsigned char LML_types[] = { 0b000, 0b001, 0b010, 0b011, 0b100, 0b101, 0b110, 0b111};
-unsigned char noise_level;
-unsigned char interval;
-
+struct capture
+{
+    char mac_addr[18];
+    int8_t rssi;
+    char oui[9];
+    double distance;
+} capture;
 
 // Callback function for SMS response
 static size_t SMSResponseCallback(void *contents, size_t size, size_t nmemb, void *userp)
@@ -450,6 +467,103 @@ void govee_api(const string &device_id, const string &action, const string &valu
     }
 }
 */
+
+// RSSI void functions and thread
+void getDeviceID(pcap_if_t **all_devs, pcap_if_t **node_curr, char error_buff[], char **devID, bool debug)
+{
+    if (pcap_findalldevs(all_devs, error_buff) != 0)
+    {
+        logError("Error finding device: " + std::string(error_buff));
+        exit(1);
+    }
+
+    for (*node_curr = *all_devs; *node_curr; *node_curr = (*node_curr)->next)
+    {
+        if (debug)
+        {
+            printf("Device: %s\n", (*node_curr)->name);
+        }
+        if (((*node_curr)->flags & PCAP_IF_WIRELESS) && ((*node_curr)->flags & PCAP_IF_RUNNING))
+        {
+            *devID = (*node_curr)->name;
+            printf("Using device: %s\n", *devID);
+            return;
+        }
+    }
+
+    logError("Suitable device not found.");
+    exit(1);
+}
+
+void my_callback(u_char *unused, const struct pcap_pkthdr *header, const u_char *bytes)
+{
+    (void)unused; // Ignore unused parameter warning
+
+    bpf_u_int32 packet_length = header->caplen;
+    uint16_t radiotap_len = bytes[2] + (bytes[3] << 8);
+
+    capture.rssi = (int8_t)bytes[radiotap_len - 1];
+    int src_mac = radiotap_len + 10;
+
+    snprintf(capture.mac_addr, sizeof(capture.mac_addr), "%02x:%02x:%02x:%02x:%02x:%02x",
+             bytes[src_mac], bytes[src_mac + 1], bytes[src_mac + 2], bytes[src_mac + 3],
+             bytes[src_mac + 4], bytes[src_mac + 5]);
+    printf("\n---------------------------------------\n");
+    printf("RSSI: %d dBm\n", capture.rssi);
+    printf("MAC Address: %s\n", capture.mac_addr);
+
+    int temp = radiotap_len + 24;
+    if (static_cast<bpf_u_int32>(temp) < packet_length && bytes[temp] == 221)
+    {
+        snprintf(capture.oui, sizeof(capture.oui), "%02x:%02x:%02x",
+                 bytes[temp + 2], bytes[temp + 3], bytes[temp + 4]);
+        printf("Vendor OUI: %s\n", capture.oui);
+    }
+    else
+    {
+        printf("Vendor ID not found.\n");
+    }
+
+    double static_rssi_1m = -49; // RSSI at 1 meter
+    capture.distance = pow(10, ((static_rssi_1m - capture.rssi) / (10 * 2.5)));
+    printf("Estimated Distance: %.3f meters\n", capture.distance);
+    printf("---------------------------------------\n");
+}
+
+void *rssi_thread_func(void *args)
+{
+    while (true)
+    {
+        getDeviceID(&sniffinput.alldevs, &sniffinput.node, sniffinput.error_buffer, &sniffinput.dev_ID, true);
+
+        sniffinput.dev_handler = pcap_create(sniffinput.dev_ID, sniffinput.error_buffer);
+        if (sniffinput.dev_handler == NULL)
+        {
+            logError("Error creating handler: " + std::string(sniffinput.error_buffer));
+            continue;
+        }
+
+        pcap_set_snaplen(sniffinput.dev_handler, 2048);
+        if (pcap_can_set_rfmon(sniffinput.dev_handler))
+        {
+            pcap_set_rfmon(sniffinput.dev_handler, 1);
+        }
+        pcap_set_timeout(sniffinput.dev_handler, 512);
+
+        if (pcap_activate(sniffinput.dev_handler) != 0)
+        {
+            pcap_perror(sniffinput.dev_handler, "Handler activation error:");
+            pcap_close(sniffinput.dev_handler);
+            continue;
+        }
+
+        pcap_loop(sniffinput.dev_handler, 0, my_callback, NULL);
+        pcap_close(sniffinput.dev_handler);
+    }
+
+    return NULL;
+}
+
 // After pairing, parent needs to listen to children
 // @todo: Implement sockets setup for communication with children
 // @todo: Implement logic for distance measurements from children
@@ -601,33 +715,30 @@ void *root_node(void *args)
                     continue; // we don't know what packet this is, but it's not one we care about. Move on.
                 }
             }
-        } 
-    }// handleLeafRequest(leafID, action, value); add this in to handle leaftrequests
-          // Potential example??
-        /* logmsg(arguments->time_begin, &new_alt_tv, arguments->log_file, "Calibration complete. System operational.", true);
-while (true) {
-    memset(buffer, 0, 200);
-    ssize_t message_len = recvfrom(sock, buffer, 200, 0, (struct sockaddr *)&sender_address, &sender_address_len);
-    if (message_len > 0) {
-        buffer[message_len] = '\0';
-        map<string, string> packet = parse_json(buffer);
-
-        // Check for specific commands or status updates from leaf nodes
-        if (packet["type"] == "command" && packet.count("command") && packet.count("leafID")) {
-            string leafID = packet["leafID"];
-            string command = packet["command"];
-            string value = packet.count("value") ? packet["value"] : "";
-            handleLeafRequest(leafID, command, value);
         }
+    } // handleLeafRequest(leafID, action, value); add this in to handle leaftrequests
+      // Potential example??
+    /* logmsg(arguments->time_begin, &new_alt_tv, arguments->log_file, "Calibration complete. System operational.", true);
+while (true) {
+memset(buffer, 0, 200);
+ssize_t message_len = recvfrom(sock, buffer, 200, 0, (struct sockaddr *)&sender_address, &sender_address_len);
+if (message_len > 0) {
+    buffer[message_len] = '\0';
+    map<string, string> packet = parse_json(buffer);
+
+    // Check for specific commands or status updates from leaf nodes
+    if (packet["type"] == "command" && packet.count("command") && packet.count("leafID")) {
+        string leafID = packet["leafID"];
+        string command = packet["command"];
+        string value = packet.count("value") ? packet["value"] : "";
+        handleLeafRequest(leafID, command, value);
     }
+}
 }
 delete[] buffer;
 close(sock);
 return NULL;
 */
-
-
-    
 
     // calibration phase complete. The root now stores details for every sibling's distance from it's other siblings. We can actually
     // start doing our job now :D
@@ -677,15 +788,15 @@ void *leaf_node(void *args)
     sendto(sock, message.c_str(), message.size(), 0, (struct sockaddr *)&root_address, sizeof(root_address));
     // confirmation for pairing with the root.
 
-    // need to implement calibration phase here - with a wait until it actually begins. 
-    while (true) {
+    // need to implement calibration phase here - with a wait until it actually begins.
+    while (true)
+    {
         message_len = recvfrom(sock, buffer, sizeof(&buffer), 0, (struct sockaddr *)&root_address, &root_address_len);
-        if (message_len > 0) {
+        if (message_len > 0)
+        {
             data = parse_json(buffer);
-            
         }
     }
-
 
     /*
         Need to begin sniffer thread here before entering while loop for socket operations.
@@ -694,11 +805,13 @@ void *leaf_node(void *args)
 
     double interval_start = epoch_double(&ints_tv);
 
-    while (true) { // this is probably gonna end up as a simple event-driven system - in order to enable it to respond to different messages from root.
-        if (epoch_double(&ints_tv) - interval_start < arguments -> interval - 0.002) { // give the code 20 ms to send data
+    while (true)
+    { // this is probably gonna end up as a simple event-driven system - in order to enable it to respond to different messages from root.
+        if (epoch_double(&ints_tv) - interval_start < arguments->interval - 0.002)
+        { // give the code 20 ms to send data
             message_len = recvfrom(sock, buffer, sizeof(&buffer), 0, (struct sockaddr *)&root_address, &root_address_len);
-            if (message_len > 0) {
-                
+            if (message_len > 0)
+            {
             }
         }
     }
@@ -711,6 +824,13 @@ void *leaf_node(void *args)
 int main()
 {
     cout << "-------------------------- Project Integrate --------------------------" << endl;
+    pthread_t root_thread, leaf_thread, rssi_thread;
+    if (pthread_create(&rssi_thread, NULL, rssi_thread_func, NULL) != 0)
+    {
+        perror("Failed to create the RSSI thread");
+        return EXIT_FAILURE;
+    }
+
     Args *args = (struct Args *)malloc(sizeof(struct Args));
     fstream logfile;
     struct timespec tv, alttv;
@@ -780,7 +900,6 @@ int main()
 
     map<string, string> packet;
 
-    pthread_t root_thread, leaf_thread;
     bool am_root_node = true;
 
     while ((epoch_double(&alttv) - connection_wait_begin) < DEFAULT_WAIT)
