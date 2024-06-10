@@ -8,9 +8,10 @@ const sched_param *priority = &pr;
 const unsigned char LML_types[] = {0b000, 0b001, 0b010, 0b011, 0b100, 0b101, 0b110, 0b111};
 unsigned char noise_level;
 unsigned char interval;
+double global_begin = 0.0;
+std::fstream logfile("log.txt", std::ios::app);
 
 const string LML_Types[] = {"type", "noise", "candidate", "signal_data", "device", "action", "configure", "port", "protocol", "name_of_device", "devices", "socket_to_communicate", "type_of_socket_used_for_communication", "interval"};
-std::ofstream rssi_log("rssi.txt", std::ios::app);
 
 // Global Structs
 struct LeafDetails
@@ -481,6 +482,27 @@ void logRSSI(const std::string &message)
     rssi_log << message << std::endl;
 }
 
+void checkAndRotateLog()
+{
+    const char *filename = "rssi.txt";
+    rssi_log.close();
+    rssi_log.open(filename, std::ofstream::trunc | std::ofstream::out);
+    if (!rssi_log.is_open())
+    {
+        std::cerr << "Failed to reopen rssi.txt file: " << filename << std::endl;
+        struct timespec current_time;
+        clock_gettime(CLOCK_REALTIME, &current_time);
+        logmsg(global_begin, &current_time, &logfile, "Failed to reopen rssi.txt file: " + std::string(filename), true);
+    }
+    else
+    {
+        std::time_t now = std::time(nullptr);
+        struct timespec current_time;
+        clock_gettime(CLOCK_REALTIME, &current_time);
+        logmsg(global_begin, &current_time, &logfile, "rssi.txt was reset on " + std::string(std::ctime(&now)), true);
+    }
+}
+
 void getDeviceID(pcap_if_t **all_devs, pcap_if_t **node_curr, char error_buff[], char **devID, bool debug)
 {
     if (pcap_findalldevs(all_devs, error_buff) != 0)
@@ -551,14 +573,24 @@ void my_callback(u_char *unused, const struct pcap_pkthdr *header, const u_char 
 
 void *rssi_thread_func(void *args)
 {
+    auto last_check_time = std::chrono::steady_clock::now();
+    std::chrono::seconds interval(20);
+
     while (true)
     {
+        auto current_time = std::chrono::steady_clock::now();
+        if (current_time - last_check_time > interval)
+        {
+            checkAndRotateLog();
+            last_check_time = current_time; // Reset the last check time
+        }
+
         getDeviceID(&sniffinput.alldevs, &sniffinput.node, sniffinput.error_buffer, &sniffinput.dev_ID, true);
 
         sniffinput.dev_handler = pcap_create(sniffinput.dev_ID, sniffinput.error_buffer);
         if (sniffinput.dev_handler == NULL)
         {
-            logError("Error creating handler: " + std::string(sniffinput.error_buffer));
+            logRSSI("Error creating handler: " + std::string(sniffinput.error_buffer));
             continue;
         }
 
