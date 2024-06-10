@@ -32,7 +32,9 @@ sched_param pr = {sched_get_priority_max(SCHED_RR)};
 const sched_param *priority = &pr;
 
 const unsigned char LML_types[] = { 0b000, 0b001, 0b010, 0b011, 0b100, 0b101, 0b110, 0b111};
-unsigned char noise_level; 
+unsigned char noise_level;
+unsigned char interval;
+
 
 // Callback function for SMS response
 static size_t SMSResponseCallback(void *contents, size_t size, size_t nmemb, void *userp)
@@ -565,7 +567,7 @@ void *root_node(void *args)
                             {
                                 unsigned char buf[sizeof(struct in6_addr)];
                                 inet_pton(AF_INET6, leaf_details["Leaf#" + to_string(x + 1)].ipAddress.c_str(), buf);
-                                if (buf == sender_address.sin6_addr.__u6_addr.__u6_addr8)
+                                if (buf == sender_address.sin6_addr.s6_addr)
                                 { // compares the IP address of the stored leaf to the one that just came in. If it matches, store the distance estimate with it's sibling and move on.
                                     leaves[x] = true;
                                     leaf_details["Leaf#" + to_string(x + 1)].distanceFromSiblings.insert({packet["leaf"], stoi(packet["distance"])});
