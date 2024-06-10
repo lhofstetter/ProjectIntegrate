@@ -62,7 +62,7 @@ namespace LML
 }
 void getDeviceID(pcap_if_t **all_devs, pcap_if_t **node_curr, char error_buff[], char **devID, bool debug);
 void my_callback(u_char *unused, const struct pcap_pkthdr *header, const u_char *bytes);
-void *rssi_thread(void *args);
+void *rssi_thread_func(void *args);
 void send_udp_packet(const std::string &message, const std::string &ip, int port);
 void send_tcp_packet(const std::string &message, const std::string &ip, int port);
 std::string exec(const char *cmd);
