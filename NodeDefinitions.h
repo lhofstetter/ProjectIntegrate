@@ -28,6 +28,7 @@
 #include <sys/resource.h>
 #include <sys/select.h>
 #include <ctime>
+#include <mutex>
 
 #define PAIRING_PORT 8082
 #define DEFAULT_WAIT 10.0
@@ -73,5 +74,5 @@ void *root_node(void *arg);
 void *leaf_node(void *arg);
 void govee_api(const std::string &api_key, const std::string &device_id, const std::string &action, const std::string &value);
 void comms(const std::string &message, const std::string &ip, int port, int noise_level);
-
+std::mutex logMutex;
 #endif

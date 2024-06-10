@@ -504,32 +504,33 @@ void govee_api(const string &device_id, const string &action, const string &valu
 // RSSI void functions and thread
 void logRSSI(const std::string &message)
 {
+    std::lock_guard<std::mutex> lock(logMutex);                        // Ensuring thread safety
+    std::ofstream rssi_log("rssi.txt", std::ios::out | std::ios::app); // Open file
     if (!rssi_log.is_open())
     {
         std::cerr << "Failed to open rssi.txt for logging." << std::endl;
         return;
     }
     rssi_log << message << std::endl;
+    rssi_log.close(); // Close file immediately after writing
 }
 
 void checkAndRotateLog()
 {
+    std::lock_guard<std::mutex> lock(logMutex); // Ensuring thread safety
     const char *filename = "rssi.txt";
-    rssi_log.close();
-    rssi_log.open(filename, std::ofstream::trunc | std::ofstream::out);
+    std::cout << "Attempting to delete and recreate " << filename << std::endl;
+
+    // Close and attempt to delete the file
+    std::remove(filename);
+    std::ofstream rssi_log(filename, std::ios::out | std::ios::app); // Re-create the file
     if (!rssi_log.is_open())
     {
-        std::cerr << "Failed to reopen rssi.txt file: " << filename << std::endl;
-        struct timespec current_time;
-        clock_gettime(CLOCK_REALTIME, &current_time);
-        logmsg(global_begin, &current_time, &logfile, "Failed to reopen rssi.txt file: " + std::string(filename), true);
+        std::cerr << "Failed to reopen " << filename << std::endl;
     }
     else
     {
-        std::time_t now = std::time(nullptr);
-        struct timespec current_time;
-        clock_gettime(CLOCK_REALTIME, &current_time);
-        logmsg(global_begin, &current_time, &logfile, "rssi.txt was reset on " + std::string(std::ctime(&now)), true);
+        std::cout << "Log file " << filename << " recreated successfully." << std::endl;
     }
 }
 
@@ -603,14 +604,16 @@ void my_callback(u_char *unused, const struct pcap_pkthdr *header, const u_char 
 
 void *rssi_thread_func(void *args)
 {
+    std::cout << "RSSI Sniffer thread started." << std::endl;
     auto last_check_time = std::chrono::steady_clock::now();
-    std::chrono::seconds interval(20);
+    std::chrono::seconds interval(20); // Reset rssi.txt every 20 seconds
 
     while (true)
     {
         auto current_time = std::chrono::steady_clock::now();
-        if (current_time - last_check_time > interval)
+        if (current_time - last_check_time >= interval)
         {
+            std::cout << "Checking and rotating log..." << std::endl;
             checkAndRotateLog();
             last_check_time = current_time; // Reset the last check time
         }
@@ -669,10 +672,10 @@ std::string exec(const char *cmd)
     pclose(pipe);
     return result;
 }
-
 // Thread function for channel synchronization
 void *channel_sync_thread(void *arg)
 {
+    std::cout << "Channel synchronization thread started." << std::endl;
     std::string findInterfaceCmd = "iw dev | grep Interface | awk '{print $2}' | grep -v '^" DEFAULT_WIRELESS "$' | head -n 1";
     std::string antennaInterface = exec(findInterfaceCmd.c_str());
     if (antennaInterface.empty())
@@ -943,6 +946,7 @@ void *leaf_node(void *args)
     /*
         Need to begin sniffer thread here before entering while loop for socket operations.
         That means we need to make the shared memory buffer and everything else that the leaf and sniffer both need to communicate.
+        Switching it to global structs, we have hte other sniffer thread.
     */
 
     double interval_start = epoch_double(&ints_tv);
