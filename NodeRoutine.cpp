@@ -2,7 +2,6 @@
 
 using namespace std;
 
-map<string, LeafDetails> leaf_details;
 vector<string> deviceIDs = {"device_id_1", "device_id_2", "device_id_3"};
 sched_param pr = {sched_get_priority_max(SCHED_RR)};
 const sched_param *priority = &pr;
@@ -23,6 +22,8 @@ struct LeafDetails
     map<string, int> distanceFromSiblings;
     string deviceID;
 };
+
+map<string, LeafDetails> leaf_details;
 
 struct Args
 {
@@ -317,7 +318,7 @@ void logmsg(double begin, struct timespec *current_time, fstream *logfile, strin
         cout << complete_msg << endl;
 }
 
-std::string exec(const char *cmd)
+std::string noise(const char *cmd)
 {
     std::array<char, 128> buffer;
     std::string result;
@@ -337,7 +338,7 @@ std::string exec(const char *cmd)
 int get_noise_level(const std::string &interface)
 {
     std::string command = "iwconfig " + interface;
-    std::string output = exec(command.c_str());
+    std::string output = noise(command.c_str());
 
     std::regex noise_regex("(Noise level=(-?\\d+))");
     std::smatch match;
