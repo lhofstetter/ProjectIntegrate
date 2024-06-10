@@ -56,6 +56,22 @@ struct capture
     double distance;
 } capture;
 
+struct candidate_device {
+    char mac_addr[6];
+    map<string, float> distances;
+    timespec start; 
+    bool is_trial_device;
+    bool countdown;
+    int8_t counter;
+} device;
+
+struct trial_device {
+    char mac_addr[6];
+    map<string, float> distances;
+    int8_t counter;
+    timespec initial_encounter;
+} trial_device;
+
 // Callback function for SMS response
 static size_t SMSResponseCallback(void *contents, size_t size, size_t nmemb, void *userp)
 {
