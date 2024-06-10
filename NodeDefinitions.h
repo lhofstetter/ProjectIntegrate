@@ -33,6 +33,9 @@
 #define DEFAULT_INTERFACE "eth0"
 #define DEFAULT_CALIBRATION_NUMBER 100
 
+#define DEFAULT_WIRELESS "wlan0"
+#define FALLBACK_ANTENNA_INTERFACE "wlan1"
+
 #define WARN 1
 #define ERROR 2
 

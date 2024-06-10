@@ -564,6 +564,67 @@ void *rssi_thread_func(void *args)
     return NULL;
 }
 
+// Thread to make sure both NICs are on the same channel
+// Function to execute shell commands and get results
+std::string exec(const char *cmd)
+{
+    char buffer[128];
+    std::string result = "";
+    FILE *pipe = popen(cmd, "r");
+    if (!pipe)
+        throw std::runtime_error("popen() failed!");
+    try
+    {
+        while (fgets(buffer, sizeof(buffer), pipe) != nullptr)
+        {
+            result += buffer;
+        }
+    }
+    catch (...)
+    {
+        pclose(pipe);
+        throw;
+    }
+    pclose(pipe);
+    return result;
+}
+
+// Thread function for channel synchronization
+void *channel_sync_thread(void *arg)
+{
+    std::string findInterfaceCmd = "iw dev | grep Interface | awk '{print $2}' | grep -v '^" DEFAULT_WIRELESS "$' | head -n 1";
+    std::string antennaInterface = exec(findInterfaceCmd.c_str());
+    if (antennaInterface.empty())
+    {
+        antennaInterface = FALLBACK_ANTENNA_INTERFACE; // Use fallback if no other interface found (Trying to make this code portable)
+        std::cout << "Fallback interface used: " << antennaInterface << std::endl;
+    }
+
+    // Trim possible new line character
+    antennaInterface.erase(std::remove(antennaInterface.begin(), antennaInterface.end(), '\n'), antennaInterface.end());
+
+    std::string setupCmd = "ip link set " + antennaInterface + " down && " +
+                           "iw dev " + antennaInterface + " set type monitor && " +
+                           "ip link set " + antennaInterface + " up";
+    system(setupCmd.c_str());
+
+    std::string current_channel;
+    while (true)
+    {
+        std::string channelCmd = "iw dev " DEFAULT_WIRELESS " info | grep channel | awk '{print $2}'";
+        std::string new_channel = exec(channelCmd.c_str());
+        if (new_channel != current_channel)
+        {
+            std::string changeChannelCmd = "iw dev " + antennaInterface + " set channel " + new_channel;
+            system(changeChannelCmd.c_str());
+            current_channel = new_channel;
+            std::cout << "Channel updated to " << current_channel << " on " << antennaInterface << std::endl;
+        }
+        sleep(60); // Check every minute? Longer?
+    }
+    return NULL;
+}
+
 // After pairing, parent needs to listen to children
 // @todo: Implement sockets setup for communication with children
 // @todo: Implement logic for distance measurements from children
@@ -824,11 +885,16 @@ void *leaf_node(void *args)
 int main()
 {
     cout << "-------------------------- Project Integrate --------------------------" << endl;
-    pthread_t root_thread, leaf_thread, rssi_thread;
+    pthread_t root_thread, leaf_thread, rssi_thread, channel_thread;
     if (pthread_create(&rssi_thread, NULL, rssi_thread_func, NULL) != 0)
     {
         perror("Failed to create the RSSI thread");
         return EXIT_FAILURE;
+    }
+    if (pthread_create(&channel_thread, NULL, channel_sync_thread, NULL) != 0)
+    {
+        std::cerr << "Failed to create channel synchronization thread" << std::endl;
+        return 1;
     }
 
     Args *args = (struct Args *)malloc(sizeof(struct Args));
