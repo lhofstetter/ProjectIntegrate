@@ -72,6 +72,17 @@ struct trial_device {
     timespec initial_encounter;
 } trial_device;
 
+struct permanent_device {
+    char mac_addr[6];
+    map<string, float> distances;
+    timespec last_update;
+    bool currently_active;
+} pd;
+
+struct blocked_device {
+    char mac_addr[6];
+} bd;
+
 // Callback function for SMS response
 static size_t SMSResponseCallback(void *contents, size_t size, size_t nmemb, void *userp)
 {
