@@ -67,6 +67,7 @@ void send_udp_packet(const std::string &message, const std::string &ip, int port
 void send_tcp_packet(const std::string &message, const std::string &ip, int port);
 std::string exec(const char *cmd);
 std::ofstream rssi_log("rssi.txt", std::ios::app);
+std::fstream logfile("log.txt", std::ios::app);
 int get_noise_level(const std::string &interface);
 void *root_node(void *arg);
 void *leaf_node(void *arg);

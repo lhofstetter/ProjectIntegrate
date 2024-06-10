@@ -9,7 +9,6 @@ const unsigned char LML_types[] = {0b000, 0b001, 0b010, 0b011, 0b100, 0b101, 0b1
 unsigned char noise_level;
 unsigned char interval;
 double global_begin = 0.0;
-std::fstream logfile("log.txt", std::ios::app);
 
 const string LML_Types[] = {"type", "noise", "candidate", "signal_data", "device", "action", "configure", "port", "protocol", "name_of_device", "devices", "socket_to_communicate", "type_of_socket_used_for_communication", "interval"};
 
@@ -56,30 +55,34 @@ struct capture
     double distance;
 } capture;
 
-struct candidate_device {
+struct candidate_device
+{
     char mac_addr[6];
     map<string, float> distances;
-    timespec start; 
+    timespec start;
     bool is_trial_device;
     bool countdown;
     int8_t counter;
 } device;
 
-struct trial_device {
+struct trial_device
+{
     char mac_addr[6];
     map<string, float> distances;
     int8_t counter;
     timespec initial_encounter;
 } trial_device;
 
-struct permanent_device {
+struct permanent_device
+{
     char mac_addr[6];
     map<string, float> distances;
     timespec last_update;
     bool currently_active;
 } pd;
 
-struct blocked_device {
+struct blocked_device
+{
     char mac_addr[6];
 } bd;
 
@@ -1102,7 +1105,7 @@ int main()
 }
 #endif
 
-// Unit testing code for LML
+// Unit testing code for LML algo
 // g++ -DLML_TEST -std=c++17 -Wall -Wextra NodeRoutine.cpp -o lml_test -lcpr
 // ./lml_test
 #ifdef LML_TEST
