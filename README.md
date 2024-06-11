@@ -7,6 +7,4 @@ This differs from traditional technologies that use motion sensors because we ar
 
 
 Installation:
-The installation was created to be as seamless as possible (PnP).  The master Pi node (Raspberry Pi 3) will need to be plugged into power located centrally in the home.
-The reamining Pi zeros also need to be plugged into power and these should be placed ideally in the corners of the house to provide the most optimal coverage.  Before the 
-boards are plugged into power ensure that the wifi antennas are plugged into the Pi via the usb a to microusb adapter.
+The installation was created to be as seamless as possible (PnP).  The "root" Pi node (Raspberry Pi 3) will need to be plugged into power in one corner of the user's home. The remaining Pi zeros also need to be plugged into power and these should be placed ideally in the other corners of the house to provide the most optimal coverage.  Before the boards are plugged into power ensure that the wifi antennas are plugged into the Pi via the USB A to Micro-USB adapter.
