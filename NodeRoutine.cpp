@@ -806,8 +806,9 @@ void *root_node(void *args)
         memset(buffer, '\0', 200);
         string msg = "{\n\"type\":\"pairing\",\n\"noise\":\"" + to_string(get_noise_level("wlan0")) + "\",\n\"interval\":" + to_string(DEFAULT_INTERVAL + (DEFAULT_INTERVAL * paired_leaves)) + "\n}";
         sendto(sock, msg.c_str(), msg.size(), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
-        // recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&sender_address, &sender_address_len);
+        recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&sender_address, &sender_address_len);
         // Listening for children responses
+        sleep(2);
 
         ssize_t message_len = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&sender_address, &sender_address_len);
         if (message_len > 0)
@@ -940,8 +941,10 @@ void *root_node(void *args)
     // From now on we must assume that we are not always in control of the CPU, so keep that in mind.
     
     while (true) {
+        u_char device_belongs = 0b100;
+
+        // update with most recent packet sniffed
         if (pthread_mutex_lock(&capture_lock) == 0 && capture.unique_name != '\0') { // we've acquired the lock for the capture successfully. 
-            u_char device_belongs = 0b100;
             int x = 0;
             for (int i = 0; i < 256; i++) {
                 if (candidate_list[i] != nullptr && capture.unique_name == candidate_list[i]->name) {
@@ -963,7 +966,7 @@ void *root_node(void *args)
                 } else if (trial_list[i] != nullptr) { // have to iterate through the trial list as we go so that x will point to the correct value.
                     x++;
                 } else if (trial_list[i] == nullptr && permanent_list[i] == nullptr && blocklist[i] == nullptr && candidate_list[i] == nullptr) {
-                    break; // we're out of values - go ahead and break the loop early. 
+                    break; // we're out of values - go ahead and break the loop early, must be in a trial list
                 }
             }
 
@@ -977,14 +980,27 @@ void *root_node(void *args)
                     for (int i = 0; i < 6; i++) {
                         d -> mac_addr[i] = capture.mac_addr[i];
                     }
-
                     trial_list[x] = d;
                     break;
-                
-                default: // different kind of device
+                case 0b000: // already in candidate list. Update the relevant values. 
+                    (candidate_list[x] -> distances)["root"] = capture.distance;
+                    break;
+                case 0b001: // already in trial list. Update the relevant value.
+                    (trial_list[x] -> distances)["root"] = capture.distance;
+                    break;
+                case 0b010:
+                    (permanent_list[x] -> distances)["root"] = capture.distance;
+                    break;
+                default: // blocked device
                     break;
             }
         }
+    
+
+
+
+
+        
     }
 
     close(sock);
@@ -1046,8 +1062,8 @@ void *leaf_node(void *args)
         if (epoch_double(&ints_tv) - interval_start < arguments->interval - 0.002)
         { // give the code 20 ms to send data
             message_len = recvfrom(sock, buffer, sizeof(&buffer), 0, (struct sockaddr *)&root_address, &root_address_len);
-            if (message_len > 0)
-            {
+            if (message_len > 0) {
+                
             }
         }
     }
@@ -1061,16 +1077,6 @@ int main()
 {
     cout << "-------------------------- Project Integrate --------------------------" << endl;
     pthread_t root_thread, leaf_thread, rssi_thread, channel_thread;
-    if (pthread_create(&rssi_thread, NULL, rssi_thread_func, NULL) != 0)
-    {
-        perror("Failed to create the RSSI thread");
-        return EXIT_FAILURE;
-    }
-    if (pthread_create(&channel_thread, NULL, channel_sync_thread, NULL) != 0)
-    {
-        std::cerr << "Failed to create channel synchronization thread" << std::endl;
-        return 1;
-    }
 
     Args *args = (struct Args *)malloc(sizeof(struct Args));
     fstream logfile;
