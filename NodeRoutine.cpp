@@ -11,6 +11,7 @@ const unsigned char LML_types[] = {0b000, 0b001, 0b010, 0b011, 0b100, 0b101, 0b1
 unsigned char noise_level;
 unsigned char interval;
 double global_begin = 0.0;
+int received_packet_count = 0;
 pthread_mutex_t capture_lock; 
 
 
@@ -57,7 +58,7 @@ struct capture
     u_char mac_addr[6];
     int8_t rssi;
     char oui[9];
-    double distance;
+    float distance;
 } capture;
 
 struct candidate_device
@@ -629,8 +630,8 @@ void my_callback(u_char *unused, const struct pcap_pkthdr *header, const u_char 
         msg << "Vendor ID not found.\n";
     }
 
-    double static_rssi_1m = -49; // RSSI at 1 meter
-    double distance = pow(10, ((static_rssi_1m - capture.rssi) / (10 * 2.5)));
+    float static_rssi_1m = -49; // RSSI at 1 meter
+    float distance = pow(10, ((static_rssi_1m - capture.rssi) / (10 * 2.5)));
     msg << "Estimated Distance: " << distance << " meters\n"
         << "---------------------------------------\n";
     
@@ -641,6 +642,7 @@ void my_callback(u_char *unused, const struct pcap_pkthdr *header, const u_char 
     }
 
     capture.unique_name = unique_name(capture.mac_addr);
+    received_packet_count++;
 
     pthread_mutex_unlock(&capture_lock);
     logRSSI(msg.str());
@@ -938,31 +940,49 @@ void *root_node(void *args)
     // From now on we must assume that we are not always in control of the CPU, so keep that in mind.
     
     while (true) {
-        if (pthread_mutex_lock(&capture_lock) == 0) { // we've acquired the lock for the capture successfully. 
+        if (pthread_mutex_lock(&capture_lock) == 0 && capture.unique_name != '\0') { // we've acquired the lock for the capture successfully. 
             u_char device_belongs = 0b100;
             int x = 0;
             for (int i = 0; i < 256; i++) {
-                if (capture.unique_name == candidate_list[i]->name) {
+                if (candidate_list[i] != nullptr && capture.unique_name == candidate_list[i]->name) {
                     device_belongs = 0b000;
                     x = i;
                     break;
-                } else if (capture.unique_name == trial_list[i] -> name) {
+                } else if (trial_list[i] != nullptr && capture.unique_name == trial_list[i] -> name) {
                     device_belongs = 0b001;
                     x = i;
                     break;
-                } else if (capture.unique_name == permanent_list[i] -> name) {
+                } else if (permanent_list[i] != nullptr & capture.unique_name == permanent_list[i] -> name) {
                     device_belongs = 0b010;
                     x = i;
                     break;
-                } else if (capture.unique_name == blocklist[i] -> name) {
+                } else if (blocklist[i] != nullptr && capture.unique_name == blocklist[i] -> name) {
                     device_belongs = 0b011;
                     x = i;
                     break;
+                } else if (trial_list[i] != nullptr) { // have to iterate through the trial list as we go so that x will point to the correct value.
+                    x++;
+                } else if (trial_list[i] == nullptr && permanent_list[i] == nullptr && blocklist[i] == nullptr && candidate_list[i] == nullptr) {
+                    break; // we're out of values - go ahead and break the loop early. 
                 }
             }
 
-            if (device_belongs == 0b100) { // device isn't in any of our lists. 
+            switch (device_belongs) {
+                case 0b100: // device not in any of our lists. Add to trial list.
+                    trial_device * d;
+                    d -> counter = 1;
+                    d -> distances.insert({"root", capture.distance});
+                    timespec current;
+                    d -> initial_encounter = current;
+                    for (int i = 0; i < 6; i++) {
+                        d -> mac_addr[i] = capture.mac_addr[i];
+                    }
+
+                    trial_list[x] = d;
+                    break;
                 
+                default: // different kind of device
+                    break;
             }
         }
     }
