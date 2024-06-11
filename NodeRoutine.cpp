@@ -5,10 +5,14 @@ using namespace std;
 vector<string> deviceIDs = {"device_id_1", "device_id_2", "device_id_3"};
 sched_param pr = {sched_get_priority_max(SCHED_RR)};
 const sched_param *priority = &pr;
+sched_param pr1 = {sched_get_priority_max(SCHED_FIFO) - 1};
+const sched_param * priority1 = &pr1;
 const unsigned char LML_types[] = {0b000, 0b001, 0b010, 0b011, 0b100, 0b101, 0b110, 0b111};
 unsigned char noise_level;
 unsigned char interval;
 double global_begin = 0.0;
+pthread_mutex_t capture_lock; 
+
 
 const string LML_Types[] = {"type", "noise", "candidate", "signal_data", "device", "action", "configure", "port", "protocol", "name_of_device", "devices", "socket_to_communicate", "type_of_socket_used_for_communication", "interval"};
 
@@ -49,7 +53,8 @@ struct sniff_input
 
 struct capture
 {
-    char mac_addr[18];
+    u_char unique_name;
+    u_char mac_addr[6];
     int8_t rssi;
     char oui[9];
     double distance;
@@ -57,6 +62,7 @@ struct capture
 
 struct candidate_device
 {
+    unsigned char name;
     char mac_addr[6];
     map<string, float> distances;
     timespec start;
@@ -67,14 +73,16 @@ struct candidate_device
 
 struct trial_device
 {
+    unsigned char name;
     char mac_addr[6];
     map<string, float> distances;
     int8_t counter;
     timespec initial_encounter;
-} trial_device;
+};
 
 struct permanent_device
 {
+    unsigned char name;
     char mac_addr[6];
     map<string, float> distances;
     timespec last_update;
@@ -83,8 +91,34 @@ struct permanent_device
 
 struct blocked_device
 {
+    unsigned char name;
     char mac_addr[6];
 } bd;
+
+u_char unique_name (u_char mac_addr[6]) {
+    u_char name = 0b00000000;
+    u_char op1;
+    u_char op2;
+
+    u_char temp_op = 0b00000001;
+    for (int i = 0; i < 6; i++) {
+        op1 = 0b00000000;
+        op2 = 0b00000000;
+        for (int x = 0; x < 4; x++) {
+            if (((temp_op << x) & mac_addr[i])) {
+                // this byte is 1
+                op1 += (temp_op << x);
+            }
+        }
+        for (int x = 4; x < 8; x++) {
+            if (((temp_op << x) & mac_addr[i])) {
+                op2 += (temp_op << x);
+            }
+        }
+        name += (op1 & op2);
+    }
+    return name;
+}
 
 // Callback function for SMS response
 static size_t SMSResponseCallback(void *contents, size_t size, size_t nmemb, void *userp)
@@ -566,6 +600,7 @@ void getDeviceID(pcap_if_t **all_devs, pcap_if_t **node_curr, char error_buff[],
 void my_callback(u_char *unused, const struct pcap_pkthdr *header, const u_char *bytes)
 {
     (void)unused; // Ignore unused parameter
+    pthread_mutex_lock(&capture_lock);
 
     bpf_u_int32 packet_length = header->caplen;
     uint16_t radiotap_len = bytes[2] + (bytes[3] << 8);
@@ -598,8 +633,19 @@ void my_callback(u_char *unused, const struct pcap_pkthdr *header, const u_char 
     double distance = pow(10, ((static_rssi_1m - capture.rssi) / (10 * 2.5)));
     msg << "Estimated Distance: " << distance << " meters\n"
         << "---------------------------------------\n";
+    
+    capture.distance = distance;
+    
+    for (int i = 0; i < 6; i++) {
+        capture.mac_addr[i] = bytes[src_mac + i];
+    }
 
+    capture.unique_name = unique_name(capture.mac_addr);
+
+    pthread_mutex_unlock(&capture_lock);
     logRSSI(msg.str());
+
+    sched_yield();
 }
 
 void *rssi_thread_func(void *args)
@@ -607,6 +653,12 @@ void *rssi_thread_func(void *args)
     std::cout << "RSSI Sniffer thread started." << std::endl;
     auto last_check_time = std::chrono::steady_clock::now();
     std::chrono::seconds interval(20); // Reset rssi.txt every 20 seconds
+    
+    if (pthread_setschedparam(pthread_self(), SCHED_FIFO, priority1) != 0)
+    { // WARNING: successful scheduling policy change means we HAVE to manually yield thread from here on out
+        cout << "Unable to set scheduling policy. Performance of Integrate may suffer. Please try to rerun the program with root permissions." << endl;
+    }
+
 
     while (true)
     {
@@ -641,8 +693,8 @@ void *rssi_thread_func(void *args)
             continue;
         }
 
-        pcap_loop(sniffinput.dev_handler, 0, my_callback, NULL);
-        pcap_close(sniffinput.dev_handler);
+        pcap_loop(sniffinput.dev_handler, 1, my_callback, NULL);
+        //pcap_close(sniffinput.dev_handler);
     }
 
     return NULL;
@@ -799,8 +851,7 @@ void *root_node(void *args)
         bool leaves[paired_leaves - 1];
         memset(leaves, false, sizeof(leaves));
         bool cond = true;
-        while (cond)
-        {
+        while (cond) {
             message_length = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&sender_address, &sender_address_len);
             if (message_length <= 0)
             {
@@ -861,29 +912,7 @@ void *root_node(void *args)
                 }
             }
         }
-    } // handleLeafRequest(leafID, action, value); add this in to handle leaftrequests
-      // Potential example??
-    /* logmsg(arguments->time_begin, &new_alt_tv, arguments->log_file, "Calibration complete. System operational.", true);
-while (true) {
-memset(buffer, 0, 200);
-ssize_t message_len = recvfrom(sock, buffer, 200, 0, (struct sockaddr *)&sender_address, &sender_address_len);
-if (message_len > 0) {
-    buffer[message_len] = '\0';
-    map<string, string> packet = parse_json(buffer);
-
-    // Check for specific commands or status updates from leaf nodes
-    if (packet["type"] == "command" && packet.count("command") && packet.count("leafID")) {
-        string leafID = packet["leafID"];
-        string command = packet["command"];
-        string value = packet.count("value") ? packet["value"] : "";
-        handleLeafRequest(leafID, command, value);
-    }
-}
-}
-delete[] buffer;
-close(sock);
-return NULL;
-*/
+    } 
 
     // calibration phase complete. The root now stores details for every sibling's distance from it's other siblings. We can actually
     // start doing our job now :D
@@ -891,10 +920,51 @@ return NULL;
     // generate candidate list. Also, the root's distance from it's leaves has not yet been determined at this phase. That happens once the
     // sniffer thread is running.
 
-    while (true)
-    {
-        // create sniffer thread and let it begin it's job. From now on we must assume that we are not always in control of the
-        // CPU, so keep that in mind.
+    candidate_device * candidate_list[256];
+    trial_device * trial_list[256];
+    permanent_device * permanent_list[256];
+    blocked_device * blocklist[256];
+
+    for (int i = 0; i < 256; i++) {
+        candidate_list[i] = nullptr;
+        trial_list[i] = nullptr;
+        permanent_list[i] = nullptr;
+        blocklist[i] = nullptr;
+    }
+
+    pthread_t sniffer_tid;
+
+    pthread_create(&sniffer_tid, NULL, rssi_thread_func, NULL); // create sniffer thread and let it begin it's job. 
+    // From now on we must assume that we are not always in control of the CPU, so keep that in mind.
+    
+    while (true) {
+        if (pthread_mutex_lock(&capture_lock) == 0) { // we've acquired the lock for the capture successfully. 
+            u_char device_belongs = 0b100;
+            int x = 0;
+            for (int i = 0; i < 256; i++) {
+                if (capture.unique_name == candidate_list[i]->name) {
+                    device_belongs = 0b000;
+                    x = i;
+                    break;
+                } else if (capture.unique_name == trial_list[i] -> name) {
+                    device_belongs = 0b001;
+                    x = i;
+                    break;
+                } else if (capture.unique_name == permanent_list[i] -> name) {
+                    device_belongs = 0b010;
+                    x = i;
+                    break;
+                } else if (capture.unique_name == blocklist[i] -> name) {
+                    device_belongs = 0b011;
+                    x = i;
+                    break;
+                }
+            }
+
+            if (device_belongs == 0b100) { // device isn't in any of our lists. 
+                
+            }
+        }
     }
 
     close(sock);
