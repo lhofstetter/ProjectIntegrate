@@ -815,13 +815,13 @@ void *root_node(void *args)
         {
             buffer[message_len] = '\0'; // @attention: @Marley why are we getting rid of the last byte?
             string response(buffer);
+            map<string, string> packet = LML::parsePacket(response);
             char ipv6Addr[INET6_ADDRSTRLEN];
             inet_ntop(AF_INET6, &(sender_address.sin6_addr), ipv6Addr, INET6_ADDRSTRLEN);
             string ipAddr = ipv6Addr;
 
             string leaf_identifier = "Leaf#" + to_string(paired_leaves + 1);
-            if (leaf_details.find(leaf_identifier) == leaf_details.end())
-            {
+            if (packet.find("confirmation") != packet.end()) {
                 LeafDetails details = {PAIRING_PORT, ipAddr, paired_leaves + 1, DEFAULT_INTERVAL + (DEFAULT_INTERVAL * paired_leaves)};
                 leaf_details[leaf_identifier] = details;
                 logmsg(arguments->time_begin, &new_alt_tv, arguments->log_file, "Paired with new leaf node: " + leaf_identifier + " on port " + to_string(details.port) + " with IP " + details.ipAddress + ".", true);
@@ -1034,10 +1034,11 @@ void *leaf_node(void *args)
     sockaddr_in6 root_address = arguments->root_ip;
     socklen_t root_address_len = sizeof(root_address);
     ssize_t message_len;
-    string message = "{\n\"type\":\"pairing\",\n\"noise\":\"" + to_string(get_noise_level("wlan0")) + "\",\nconfirmation: true,\n}";
+    string message = "{\n\"type\":\"pairing\",\n\"noise\":\"" + to_string(get_noise_level(DEFAULT_INTERFACE)) + "\",\nconfirmation: true,\n}";
 
     sendto(sock, message.c_str(), message.size(), 0, (struct sockaddr *)&root_address, sizeof(root_address));
     // confirmation for pairing with the root.
+    recvfrom(sock, buffer, sizeof(&buffer), 0, (struct sockaddr *)&root_address, &root_address_len); // flush UDP socket
 
     // need to implement calibration phase here - with a wait until it actually begins.
     while (true)
@@ -1084,6 +1085,7 @@ int main()
     double begin = epoch_double(&tv);
     char node_message[200];
     memset(node_message, '\0', sizeof(node_message));
+    struct ipv6_mreq mreq;
 
     cout << sizeof(noise_level) << endl;
 
@@ -1126,6 +1128,10 @@ int main()
         logmsg(begin, &alttv, &logfile, "Binding to open port failed. Exiting.", false);
         exit(EXIT_FAILURE);
     }
+
+    mreq.ipv6mr_interface = if_nametoindex(DEFAULT_INTERFACE);  // Replace with the appropriate interface name
+    inet_pton(AF_INET6, "ff02::1", &mreq.ipv6mr_multiaddr);
+    setsockopt(sockfd, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP, &mreq, sizeof(mreq));
 
     struct timespec connection_wait;
     double connection_wait_begin = epoch_double(&connection_wait);

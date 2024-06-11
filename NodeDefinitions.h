@@ -29,10 +29,12 @@
 #include <sys/select.h>
 #include <ctime>
 #include <mutex>
+#include <math.h>
+#include <net/if.h>
 
-#define PAIRING_PORT 8082
+#define PAIRING_PORT 24000
 #define DEFAULT_WAIT 10.0
-#define DEFAULT_INTERFACE "eth0"
+#define DEFAULT_INTERFACE "wlan0"
 #define DEFAULT_CALIBRATION_NUMBER 100
 
 #define DEFAULT_WIRELESS "wlan0"

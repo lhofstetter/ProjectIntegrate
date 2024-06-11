@@ -1,3 +1,3 @@
 #!/bin/bash
 
-/home/integrate/main
+/home/integrate/main.out
