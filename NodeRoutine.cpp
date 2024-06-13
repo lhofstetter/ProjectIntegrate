@@ -1049,13 +1049,6 @@ void *leaf_node(void *args)
             data = parse_json(buffer);
         }
     }
-
-    /*
-        Need to begin sniffer thread here before entering while loop for socket operations.
-        That means we need to make the shared memory buffer and everything else that the leaf and sniffer both need to communicate.
-        Switching it to global structs, we have hte other sniffer thread.
-    */
-
     double interval_start = epoch_double(&ints_tv);
 
     while (true)
