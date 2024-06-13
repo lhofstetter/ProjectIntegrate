@@ -51,7 +51,7 @@ Once installed, the system automatically detects the registered mobile devices a
 - ![IPv6](https://img.shields.io/badge/IPv6-585858?style=for-the-badge)
 
 ## License
-This project is protected under proprietary license terms. Please see the `LICENSE.txt` file for more details.
+This project is protected under proprietary license terms. Please see the [`LICENSE.txt`](https://github.com/lhofstetter/ProjectIntegrate/blob/master/LICENSE.txt) file for more details.
 
 ## Contact
 - Luke Hofstetter - [lhofstetter@scu.edu](mailto:lhofstetter@scu.edu)
