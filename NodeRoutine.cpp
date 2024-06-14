@@ -311,6 +311,23 @@ namespace LML
     }
 }
 
+map<string, string> parse_json_v2 (string msg) {
+    map<string, string> json_map;
+    string current_key = "";
+    string current_val = "";
+
+    for (int i = 0; i < msg.size(); i++) {
+        if (msg[i] != '{' && msg[i] != '\n' && msg[i] != ',' && current_key == "") {
+            current_key += msg[i];
+        } else if (current_key != "" && msg[i] != ':') { // in the middle of the key
+            current_key += msg[i];
+        } else if (current_key != "" && msg[i] == ':') {
+            
+        }
+    }
+
+    }
+
 map<string, string> parse_json(char *node_msg)
 {
     map<string, string> m;
@@ -806,9 +823,7 @@ void *root_node(void *args)
         memset(buffer, '\0', 200);
         string msg = "{\n\"type\":\"pairing\",\n\"noise\":\"" + to_string(get_noise_level("wlan0")) + "\",\n\"interval\":" + to_string(DEFAULT_INTERVAL + (DEFAULT_INTERVAL * paired_leaves)) + "\n}";
         sendto(sock, msg.c_str(), msg.size(), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
-        recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&sender_address, &sender_address_len);
         // Listening for children responses
-        sleep(2);
 
         ssize_t message_len = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&sender_address, &sender_address_len);
         if (message_len > 0)
@@ -848,7 +863,7 @@ void *root_node(void *args)
 
     for (int i = 0; i < paired_leaves; i++)
     {
-        string msg = "{\n\"type\":\"calibration\",\n\"noise\":\"" + to_string(get_noise_level("wlan0")) + ",\n\"num_of_calibration_packets\":" + to_string(DEFAULT_CALIBRATION_NUMBER) + ",\n\"leaf\":" + leaf_details["Leaf#" + to_string(i + 1)].ipAddress + "\n}";
+        string msg = "{\n\"type\":\"calibration\",\n\"noise\":\"" + to_string(get_noise_level(DEFAULT_INTERFACE)) + "\",\n\"num_of_calibration_packets\":" + to_string(DEFAULT_CALIBRATION_NUMBER) + ",\n\"leaf\":" + leaf_details["Leaf#" + to_string(i + 1)].ipAddress + "\n}";
         sendto(sock, msg.c_str(), msg.size(), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
         sleep(10); // sleep period while waiting for leaf to begin blasting calibration packets
         bool leaves[paired_leaves - 1];
@@ -994,6 +1009,8 @@ void *root_node(void *args)
                 default: // blocked device
                     break;
             }
+            // do some more stuff here I guess
+            pthread_mutex_unlock(&capture_lock);
         }
     
 
@@ -1087,8 +1104,6 @@ int main()
     memset(node_message, '\0', sizeof(node_message));
     struct ipv6_mreq mreq;
 
-    cout << sizeof(noise_level) << endl;
-
     try
     {
         logfile.open("log.txt", ios_base::out);
@@ -1145,11 +1160,9 @@ int main()
     broadcast.sin6_addr = broadcast_addr;
     broadcast.sin6_family = AF_INET6;
     broadcast.sin6_port = htons(PAIRING_PORT);
-    char msg[128];
+    string msg = "\n{\"type\":\"pairing\",\n\"noise\":" + to_string(get_noise_level(DEFAULT_INTERFACE)) + "\",\n\"interval\":" + to_string(DEFAULT_INTERVAL) + "\n}";
 
     const sockaddr *generic_addr = reinterpret_cast<const sockaddr *>(&broadcast);
-
-    sendto(sockfd, msg, sizeof(msg), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
 
     map<string, string> packet;
 
@@ -1170,7 +1183,7 @@ int main()
         }
         else
         {
-            sendto(sockfd, msg, sizeof(msg), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
+            sendto(sockfd, msg.c_str(), sizeof(msg.c_str()), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
         }
         sleep(1);
     }
