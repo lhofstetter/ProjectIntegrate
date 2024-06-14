@@ -1,0 +1,27 @@
+Proprietary Software License
+
+Copyright (c) 2024 Project Integrate
+
+All rights reserved.
+
+The software and associated documentation files are proprietary and confidential. It is provided under the following license terms:
+
+1. **Grant of License**: This license grants you, the user, a non-exclusive, non-transferable, non-sublicensable license to use the Software solely for your personal or internal business purposes. You may not distribute, sell, lease, rent, lend, or sublicense the Software to anyone else.
+
+2. **Restrictions**: 
+   - You may not modify, make derivative works of, disassemble, reverse compile, or reverse engineer any part of the Software, or attempt to do any of the foregoing.
+   - You may not access or use the Software in a way intended to avoid incurring fees or exceeding usage limits or quotas.
+   - You may not use the Software in any manner that violates applicable laws or regulations.
+
+3. **Ownership**: The Software is and will remain the sole property of Project Integrate, including all intellectual property rights therein. 
+
+4. **Termination**: This license is effective until terminated. It will also terminate automatically if you fail to comply with any term of this license. Upon termination, you must cease all use of the Software and delete all copies of the Software.
+
+5. **Disclaimer of Warranties**: The Software is provided "AS IS", without warranty of any kind, express or implied, including but not limited to the warranties of merchantability, fitness for a particular purpose and noninfringement.
+
+6. **Limitation of Liability**: In no event shall the authors or copyright holders be liable for any claim, damages, or other liability, whether in an action of contract, tort or otherwise, arising from, out of, or in connection with the Software or the use or other dealings in the Software.
+
+By using the Software, you are agreeing to be bound by the terms of this License.
+
+Project Integrate
+Santa Clara University 
