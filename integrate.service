@@ -2,13 +2,13 @@
 # Description
 Description=Startup daemon for Integrate. Runs as root.
 DefaultDependencies=no
-After=network.target
+After=network-online.target
 
 [Service]
 Type=simple
 User=root
 WorkingDirectory=/home/integrate/
-ExecStart=/bin/bash /usr/sbin/integrate.sh
+ExecStart=/home/integrate/main.out
 Timeoutstartsec=0
 RemainAfterExit=yes
 

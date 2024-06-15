@@ -315,54 +315,33 @@ map<string, string> parse_json_v2 (string msg) {
     map<string, string> json_map;
     string current_key = "";
     string current_val = "";
+    bool reached_val = false;
+    bool in_key = false;
 
     for (int i = 0; i < msg.size(); i++) {
-        if (msg[i] != '{' && msg[i] != '\n' && msg[i] != ',' && current_key == "") {
+        if (msg[i] == '\"' || msg[i] == ' ') {
+            continue;
+        }
+        if (msg[i] != '{' && msg[i] != '\n' && msg[i] != ',' && !in_key && !reached_val) {
             current_key += msg[i];
-        } else if (current_key != "" && msg[i] != ':') { // in the middle of the key
+            in_key = true;
+        } else if (in_key && !reached_val && msg[i] != ':') { // in the middle of the key
             current_key += msg[i];
-        } else if (current_key != "" && msg[i] == ':') {
-            
+        } else if (msg[i] == ':') { // we've reached the field associated with the key
+            in_key = false;
+            reached_val = true;
+        } else if (msg[i] != '\n' && msg[i] != ',' && reached_val) { // in the middle of the value
+            current_val += msg[i];
+        } else { // out of the value
+            json_map[current_key] = current_val;
+            current_key = "";
+            current_val = "";
+            reached_val = false;
+            in_key = false;
         }
     }
+    return json_map;
 
-    }
-
-map<string, string> parse_json(char *node_msg)
-{
-    map<string, string> m;
-    size_t i;
-    string current_str = "";
-    for (i = 0; i < strlen(node_msg); i++)
-    {
-        current_str += string(1, node_msg[i]);
-        if (current_str == "{\n" || current_str == ",\n")
-        {
-            current_str = "";
-        }
-
-        if (current_str.length() >= 4)
-        {
-            for (size_t y = 0; y < sizeof(LML_Types) / sizeof(LML_Types[0]); y++)
-            {
-                if (current_str.find(LML_Types[y] + ":") != string::npos)
-                {
-                    current_str = "";
-                    size_t x;
-
-                    for (x = i; node_msg[x] != '\n' && node_msg[x] != '\0'; x++)
-                    {
-                        current_str += string(1, node_msg[x]);
-                    }
-
-                    m[LML_Types[y]] = current_str;
-                    i = x;
-                }
-            }
-        }
-    }
-
-    return m;
 }
 
 double epoch_double(struct timespec *tv)
@@ -816,34 +795,40 @@ void *root_node(void *args)
     const sockaddr *generic_addr = reinterpret_cast<const sockaddr *>(&broadcast);
     sockaddr_in6 sender_address;
     socklen_t sender_address_len = sizeof(sender_address);
-    char *buffer = arguments->node_message;
+    socklen_t broadcast_address_len = sizeof(broadcast_addr);
+    char buffer[200];
+    memset(buffer, '\0', 200);
 
-    while (paired_leaves < MAX_LEAVES)
-    {
-        memset(buffer, '\0', 200);
+
+    while (paired_leaves < MAX_LEAVES) {
         string msg = "{\n\"type\":\"pairing\",\n\"noise\":\"" + to_string(get_noise_level("wlan0")) + "\",\n\"interval\":" + to_string(DEFAULT_INTERVAL + (DEFAULT_INTERVAL * paired_leaves)) + "\n}";
-        sendto(sock, msg.c_str(), msg.size(), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
         // Listening for children responses
 
         ssize_t message_len = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&sender_address, &sender_address_len);
+        cout << string(buffer) << endl;
         if (message_len > 0)
         {
             buffer[message_len] = '\0'; // @attention: @Marley why are we getting rid of the last byte?
             string response(buffer);
-            map<string, string> packet = LML::parsePacket(response);
+            map<string, string> packet = parse_json_v2(response);
             char ipv6Addr[INET6_ADDRSTRLEN];
             inet_ntop(AF_INET6, &(sender_address.sin6_addr), ipv6Addr, INET6_ADDRSTRLEN);
             string ipAddr = ipv6Addr;
+            cout << packet["confirmation"] << endl;
+
 
             string leaf_identifier = "Leaf#" + to_string(paired_leaves + 1);
-            if (packet.find("confirmation") != packet.end()) {
+            if (packet.find("confirmation") != packet.end() && packet["confirmation"] == "true") {
                 LeafDetails details = {PAIRING_PORT, ipAddr, paired_leaves + 1, DEFAULT_INTERVAL + (DEFAULT_INTERVAL * paired_leaves)};
                 leaf_details[leaf_identifier] = details;
                 logmsg(arguments->time_begin, &new_alt_tv, arguments->log_file, "Paired with new leaf node: " + leaf_identifier + " on port " + to_string(details.port) + " with IP " + details.ipAddress + ".", true);
                 paired_leaves++;
+                cout << "success" << endl;
             }
+        } else {
+            sendto(sock, msg.c_str(), msg.size(), 0, generic_addr, sizeof(broadcast));
         }
-        sleep(5);
+        sleep(1);
     }
     assignDeviceIDs();
 
@@ -877,7 +862,7 @@ void *root_node(void *args)
             }
             else
             {
-                map<string, string> packet = parse_json(buffer);
+                map<string, string> packet = parse_json_v2(buffer);
                 if (packet.find("packets_remaining") != packet.end())
                 {
                     if (stoi(packet["packets_remaining"]) == 0)
@@ -888,7 +873,7 @@ void *root_node(void *args)
                             continue; // wait until there's something in the socket
                         }
 
-                        packet = parse_json(buffer);
+                        packet = parse_json_v2(buffer);
                         if (packet.find("distance") != packet.end())
                         {
                             for (int x = 0; x < paired_leaves - 1; x++)
@@ -1047,15 +1032,20 @@ void *leaf_node(void *args)
     map<string, string> data; // To store assigned identifier and port
 
     // Send initial pairing requests until an assignment is received
-    char *buffer = arguments->node_message;
+    char buffer[200];
     sockaddr_in6 root_address = arguments->root_ip;
     socklen_t root_address_len = sizeof(root_address);
     ssize_t message_len;
     string message = "{\n\"type\":\"pairing\",\n\"noise\":\"" + to_string(get_noise_level(DEFAULT_INTERFACE)) + "\",\nconfirmation: true,\n}";
 
-    sendto(sock, message.c_str(), message.size(), 0, (struct sockaddr *)&root_address, sizeof(root_address));
+    
+    if (sendto(sock, message.c_str(), sizeof(message.c_str()), 0, (struct sockaddr *)&root_address, sizeof(root_address)) == -1) {
+        cout << "huh" << endl;
+    }
+
     // confirmation for pairing with the root.
-    recvfrom(sock, buffer, sizeof(&buffer), 0, (struct sockaddr *)&root_address, &root_address_len); // flush UDP socket
+
+    
 
     // need to implement calibration phase here - with a wait until it actually begins.
     while (true)
@@ -1063,7 +1053,7 @@ void *leaf_node(void *args)
         message_len = recvfrom(sock, buffer, sizeof(&buffer), 0, (struct sockaddr *)&root_address, &root_address_len);
         if (message_len > 0)
         {
-            data = parse_json(buffer);
+            data = parse_json_v2(buffer);
         }
     }
     double interval_start = epoch_double(&ints_tv);
@@ -1140,6 +1130,11 @@ int main()
     mreq.ipv6mr_interface = if_nametoindex(DEFAULT_INTERFACE);  // Replace with the appropriate interface name
     inet_pton(AF_INET6, "ff02::1", &mreq.ipv6mr_multiaddr);
     setsockopt(sockfd, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP, &mreq, sizeof(mreq));
+    int broadcastEnable = 1;
+    int multicastLoopDisable = 0;
+    setsockopt(sockfd, SOL_SOCKET, SO_BROADCAST, &broadcastEnable, sizeof(broadcastEnable));
+    setsockopt(sockfd, SOL_SOCKET, IPV6_MULTICAST_LOOP, &multicastLoopDisable, sizeof(multicastLoopDisable));
+
 
     struct timespec connection_wait;
     double connection_wait_begin = epoch_double(&connection_wait);
@@ -1153,7 +1148,7 @@ int main()
     broadcast.sin6_addr = broadcast_addr;
     broadcast.sin6_family = AF_INET6;
     broadcast.sin6_port = htons(PAIRING_PORT);
-    string msg = "\n{\"type\":\"pairing\",\n\"noise\":" + to_string(get_noise_level(DEFAULT_INTERFACE)) + "\",\n\"interval\":" + to_string(DEFAULT_INTERVAL) + "\n}";
+    string msg = "\n{\"type\":\"pairing\",\n\"noise\":" + to_string(get_noise_level(DEFAULT_INTERFACE)) + "\"\n}";
 
     const sockaddr *generic_addr = reinterpret_cast<const sockaddr *>(&broadcast);
 
@@ -1163,20 +1158,21 @@ int main()
 
     while ((epoch_double(&alttv) - connection_wait_begin) < DEFAULT_WAIT)
     {
-        if (recvfrom(sockfd, node_message, sizeof(node_message), 0, (struct sockaddr *)&client_address, &client_struct_size) > 0)
+        if (recvfrom(sockfd, node_message, sizeof(node_message), MSG_PEEK, (struct sockaddr *)&client_address, &client_struct_size) > 0)
         {
-            packet = parse_json(node_message);
-            if (packet.find("interval") != packet.end())
-            {
+            packet = parse_json_v2(node_message);
+            if (packet.find("interval") != packet.end()) {
                 am_root_node = false;
                 args->root_ip = client_address;
                 args->interval = stoi(packet["interval"]);
                 break;
+            } else {
+                recvfrom(sockfd, node_message, sizeof(node_message), 0, (struct sockaddr *)&client_address, &client_struct_size);
             }
         }
         else
         {
-            sendto(sockfd, msg.c_str(), sizeof(msg.c_str()), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
+            sendto(sockfd, msg.c_str(), sizeof(msg.c_str()), 0, generic_addr, sizeof(broadcast));
         }
         sleep(1);
     }
@@ -1193,10 +1189,7 @@ int main()
         pthread_create(&root_thread, NULL, root_node, args);
         while (true)
         {
-            if (pthread_detach(root_thread) == 0)
-            {
-                break;
-            }
+
         }
     }
     else
@@ -1204,16 +1197,11 @@ int main()
         pr = {sched_get_priority_max(SCHED_FIFO)};
         priority = &pr;
         pthread_create(&leaf_thread, NULL, leaf_node, args);
-        while (true)
-        {
-            if (pthread_detach(leaf_thread) == 0)
-            {
-                break;
-            }
+        while (true) {
+
         }
     }
 
-    pthread_exit(NULL);
 }
 #endif
 
