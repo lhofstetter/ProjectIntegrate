@@ -785,49 +785,55 @@ void *root_node(void *args)
     logmsg(arguments->time_begin, &new_alt_tv, arguments->log_file, "Root status confirmed. Entering pairing phase.", true);
 
     int sock = arguments->socket_fd;
+
+    // set-up socket for direct communication to root
+    sockaddr_in6 root_address = arguments->root_ip;
+    socklen_t root_address_len = sizeof(root_address);
+
     // Broadcast pairing message
     sockaddr_in6 broadcast;
-    struct in6_addr broadcast_addr;
-    inet_pton(AF_INET6, "ff02::1", &broadcast_addr);
-    broadcast.sin6_addr = broadcast_addr;
+    memset(&broadcast, 0, sizeof(broadcast));
+    inet_pton(AF_INET6, "ff02::1", &broadcast.sin6_addr);
     broadcast.sin6_family = AF_INET6;
     broadcast.sin6_port = htons(PAIRING_PORT);
-    const sockaddr *generic_addr = reinterpret_cast<const sockaddr *>(&broadcast);
     sockaddr_in6 sender_address;
     socklen_t sender_address_len = sizeof(sender_address);
-    socklen_t broadcast_address_len = sizeof(broadcast_addr);
     char buffer[200];
+    ssize_t message_len = 0;
+
     memset(buffer, '\0', 200);
 
 
     while (paired_leaves < MAX_LEAVES) {
         string msg = "{\n\"type\":\"pairing\",\n\"noise\":\"" + to_string(get_noise_level("wlan0")) + "\",\n\"interval\":" + to_string(DEFAULT_INTERVAL + (DEFAULT_INTERVAL * paired_leaves)) + "\n}";
         // Listening for children responses
+        // perhaps better to send out packets when the device is first in discovery mode...
 
-        ssize_t message_len = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&sender_address, &sender_address_len);
-        cout << string(buffer) << endl;
-        if (message_len > 0)
-        {
-            buffer[message_len] = '\0'; // @attention: @Marley why are we getting rid of the last byte?
+        message_len = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&sender_address, &sender_address_len); // wait for a pairing packet to be sent out
+        //buffer[message_len] = '\0'; // @attention: @Marley why are we getting rid of the last byte?
+        if (message_len > 0) {
             string response(buffer);
+            cout << response << endl;
             map<string, string> packet = parse_json_v2(response);
+
             char ipv6Addr[INET6_ADDRSTRLEN];
             inet_ntop(AF_INET6, &(sender_address.sin6_addr), ipv6Addr, INET6_ADDRSTRLEN);
             string ipAddr = ipv6Addr;
-            cout << packet["confirmation"] << endl;
-
-
             string leaf_identifier = "Leaf#" + to_string(paired_leaves + 1);
+
             if (packet.find("confirmation") != packet.end() && packet["confirmation"] == "true") {
                 LeafDetails details = {PAIRING_PORT, ipAddr, paired_leaves + 1, DEFAULT_INTERVAL + (DEFAULT_INTERVAL * paired_leaves)};
                 leaf_details[leaf_identifier] = details;
                 logmsg(arguments->time_begin, &new_alt_tv, arguments->log_file, "Paired with new leaf node: " + leaf_identifier + " on port " + to_string(details.port) + " with IP " + details.ipAddress + ".", true);
                 paired_leaves++;
                 cout << "success" << endl;
+            } else if (packet.find("confirmation") == packet.end() && packet["type"] == "pairing") { // initial boot-up phase - fire back a response now 
+                sendto(sock, msg.c_str(), msg.size(), 0, (const sockaddr *)&broadcast, sizeof(broadcast));
             }
         } else {
-            sendto(sock, msg.c_str(), msg.size(), 0, generic_addr, sizeof(broadcast));
+            sendto(sock, msg.c_str(), msg.size(), 0, (const sockaddr *)&broadcast, sizeof(broadcast));
         }
+        
         sleep(1);
     }
     assignDeviceIDs();
@@ -849,7 +855,7 @@ void *root_node(void *args)
     for (int i = 0; i < paired_leaves; i++)
     {
         string msg = "{\n\"type\":\"calibration\",\n\"noise\":\"" + to_string(get_noise_level(DEFAULT_INTERFACE)) + "\",\n\"num_of_calibration_packets\":" + to_string(DEFAULT_CALIBRATION_NUMBER) + ",\n\"leaf\":" + leaf_details["Leaf#" + to_string(i + 1)].ipAddress + "\n}";
-        sendto(sock, msg.c_str(), msg.size(), 0, (const sockaddr *)generic_addr, sizeof(broadcast));
+        sendto(sock, msg.c_str(), msg.size(), 0, (const sockaddr *)&broadcast, sizeof(broadcast));
         sleep(10); // sleep period while waiting for leaf to begin blasting calibration packets
         bool leaves[paired_leaves - 1];
         memset(leaves, false, sizeof(leaves));
@@ -1034,23 +1040,28 @@ void *leaf_node(void *args)
     // Send initial pairing requests until an assignment is received
     char buffer[200];
     sockaddr_in6 root_address = arguments->root_ip;
-    socklen_t root_address_len = sizeof(root_address);
     ssize_t message_len;
     string message = "{\n\"type\":\"pairing\",\n\"noise\":\"" + to_string(get_noise_level(DEFAULT_INTERFACE)) + "\",\nconfirmation: true,\n}";
-
+    socklen_t root_address_len = sizeof(root_address);
     
-    if (sendto(sock, message.c_str(), sizeof(message.c_str()), 0, (struct sockaddr *)&root_address, sizeof(root_address)) == -1) {
-        cout << "huh" << endl;
-    }
+
+    sockaddr_in6 broadcast;
+    memset(&broadcast, 0, sizeof(broadcast));
+
+    inet_pton(AF_INET6, "ff02::1", &broadcast.sin6_addr);
+    broadcast.sin6_family = AF_INET6;
+    broadcast.sin6_port = htons(PAIRING_PORT);
+    const sockaddr *generic_addr = reinterpret_cast<const sockaddr *>(&broadcast);
 
     // confirmation for pairing with the root.
-
+    
+    sendto(sock, message.c_str(), message.size(), 0, (const sockaddr *)&broadcast, sizeof(broadcast));
     
 
     // need to implement calibration phase here - with a wait until it actually begins.
     while (true)
     {
-        message_len = recvfrom(sock, buffer, sizeof(&buffer), 0, (struct sockaddr *)&root_address, &root_address_len);
+        message_len = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&root_address, &root_address_len);
         if (message_len > 0)
         {
             data = parse_json_v2(buffer);
@@ -1062,7 +1073,7 @@ void *leaf_node(void *args)
     { // this is probably gonna end up as a simple event-driven system - in order to enable it to respond to different messages from root.
         if (epoch_double(&ints_tv) - interval_start < arguments->interval - 0.002)
         { // give the code 20 ms to send data
-            message_len = recvfrom(sock, buffer, sizeof(&buffer), 0, (struct sockaddr *)&root_address, &root_address_len);
+            message_len = recvfrom(sock, buffer, sizeof(buffer), 0, (struct sockaddr *)&root_address, &root_address_len);
             if (message_len > 0) {
                 
             }
@@ -1102,7 +1113,7 @@ int main()
     }
 
     sockaddr_in6 address, client_address;
-    unsigned int client_struct_size = sizeof(client_address);
+    socklen_t client_struct_size = sizeof(client_address);
 
     logmsg(begin, &alttv, &logfile, "Opening socket for pairing process...", false);
 
@@ -1129,11 +1140,26 @@ int main()
 
     mreq.ipv6mr_interface = if_nametoindex(DEFAULT_INTERFACE);  // Replace with the appropriate interface name
     inet_pton(AF_INET6, "ff02::1", &mreq.ipv6mr_multiaddr);
-    setsockopt(sockfd, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP, &mreq, sizeof(mreq));
+
+    if (setsockopt(sockfd, IPPROTO_IPV6, IPV6_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) == -1) {
+        logmsg(begin, &alttv, &logfile, "FATAL: Joining multicast group for ff02::1 failed. Will cause socket to be unable to send/receive messages not addressed to it. Exiting.", true, 2);
+        exit(EXIT_FAILURE);
+    }
     int broadcastEnable = 1;
     int multicastLoopDisable = 0;
     setsockopt(sockfd, SOL_SOCKET, SO_BROADCAST, &broadcastEnable, sizeof(broadcastEnable));
-    setsockopt(sockfd, SOL_SOCKET, IPV6_MULTICAST_LOOP, &multicastLoopDisable, sizeof(multicastLoopDisable));
+    if (setsockopt(sockfd, IPPROTO_IPV6, IPV6_MULTICAST_LOOP, &multicastLoopDisable, sizeof(multicastLoopDisable)) == -1) {
+        logmsg(begin, &alttv, &logfile, "FATAL: Setting IPV6_MULTICAST_LOOP option for socket failed. Will cause sender to receive own messages. Exiting.", true, 2);
+        exit(EXIT_FAILURE);
+    }
+
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &broadcastEnable, sizeof(broadcastEnable)) == -1) {
+        logmsg(begin, &alttv, &logfile, "WARNING: Setting SO_REUSEADDR option for socket failed. Will cause node potential issues when restarting.", true, 1);
+    }
+
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, &broadcastEnable, sizeof(broadcastEnable)) == -1) {
+        logmsg(begin, &alttv, &logfile, "WARNING: Setting SO_REUSEPORT option for socket failed. Will cause node potential issues when restarting.", true, 1);
+    }
 
 
     struct timespec connection_wait;
@@ -1141,16 +1167,13 @@ int main()
 
     logmsg(begin, &alttv, &logfile, "Setup successful. Listening for other nodes...", true);
 
-    sockaddr_in6 broadcast;
-    struct in6_addr broadcast_addr;
-    inet_pton(AF_INET6, "ff02::1", &broadcast_addr);
-
-    broadcast.sin6_addr = broadcast_addr;
+    struct sockaddr_in6 broadcast;
+    memset(&broadcast, 0, sizeof(broadcast));
     broadcast.sin6_family = AF_INET6;
     broadcast.sin6_port = htons(PAIRING_PORT);
-    string msg = "\n{\"type\":\"pairing\",\n\"noise\":" + to_string(get_noise_level(DEFAULT_INTERFACE)) + "\"\n}";
 
-    const sockaddr *generic_addr = reinterpret_cast<const sockaddr *>(&broadcast);
+    inet_pton(AF_INET6, "ff02::1", &broadcast.sin6_addr);
+    string msg = "\n{\"type\":\"pairing\",\n\"noise\":" + to_string(get_noise_level(DEFAULT_INTERFACE)) + "\"\n}";
 
     map<string, string> packet;
 
@@ -1158,21 +1181,21 @@ int main()
 
     while ((epoch_double(&alttv) - connection_wait_begin) < DEFAULT_WAIT)
     {
-        if (recvfrom(sockfd, node_message, sizeof(node_message), MSG_PEEK, (struct sockaddr *)&client_address, &client_struct_size) > 0)
+        if (recvfrom(sockfd, node_message, sizeof(node_message), 0, (struct sockaddr *)&client_address, &client_struct_size) > 0)
         {
             packet = parse_json_v2(node_message);
+            cout << string(node_message) << endl;
             if (packet.find("interval") != packet.end()) {
                 am_root_node = false;
                 args->root_ip = client_address;
                 args->interval = stoi(packet["interval"]);
                 break;
-            } else {
-                recvfrom(sockfd, node_message, sizeof(node_message), 0, (struct sockaddr *)&client_address, &client_struct_size);
-            }
+            } 
         }
         else
         {
-            sendto(sockfd, msg.c_str(), sizeof(msg.c_str()), 0, generic_addr, sizeof(broadcast));
+            sendto(sockfd, msg.c_str(), msg.size(), 0, (const sockaddr *)&broadcast, sizeof(broadcast));
+            memset(node_message, '\0', sizeof(node_message));
         }
         sleep(1);
     }
@@ -1183,7 +1206,6 @@ int main()
     args->socket_fd = sockfd;
     args->log_file = &logfile;
 
-    recvfrom(sockfd, node_message, sizeof(node_message), 0, (struct sockaddr *)&client_address, &client_struct_size); // clears socket of data we passed it earlier
     if (am_root_node)
     {
         pthread_create(&root_thread, NULL, root_node, args);

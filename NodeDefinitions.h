@@ -43,7 +43,7 @@
 #define WARN 1
 #define ERROR 2
 
-#define MAX_LEAVES 2
+#define MAX_LEAVES 3
 #define DEFAULT_INTERVAL 50
 
 #define GOVEE_API_URL "https://developer-api.govee.com/v1/devices/control"
